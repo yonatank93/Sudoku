@@ -148,6 +148,31 @@ class Board:
                     self.board = tile.board
                     break
 
+    def display(self):
+        """Display the Sudoku board."""
+        print("#" * 37)
+        for ii in range(3):
+            rows = self.board[(ii * 3) : ((ii + 1) * 3)]
+            for jj, row in enumerate(rows):
+                self._print_one_row(row)
+                if jj < 2:
+                    print("#" + ("-" * 11 + "#") * 3)
+            print("#" * 37)
+
+    @staticmethod
+    def _print_one_row(row_array):
+        """Print one row of the board."""
+        b = [str(row) if row != 0 else " " for row in row_array]
+        print(
+            "#"
+            + f" {b[0]} | {b[1]} | {b[2]} "
+            + "#"
+            + f" {b[3]} | {b[4]} | {b[5]} "
+            + "#"
+            + f" {b[6]} | {b[7]} | {b[8]} "
+            + "#"
+        )
+
     def reset(self):
         """Reset the Sudoku problem."""
         self.board = self.orig_board
