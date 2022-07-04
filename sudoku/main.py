@@ -7,7 +7,7 @@ import numpy as np
 from sudoku.tile import Tile
 
 
-def callback(board):
+def default_callback(board):
     """A default callback function that is called after each iteration in the
     main while loop in :meth:`~sudoku.Board.solve`. It can be used to
     monitor the progress, e.g., by printing the number of empty tiles in the
@@ -49,7 +49,7 @@ class Board:
 
     def __init__(self, board):
         self.board = np.asarray(board)
-        self.orig_board = copy.copy(board)
+        self.orig_board = copy.copy(self.board)
         assert self.board.shape == (9, 9), (
             "The board should be a 9x9 array-like",
         )
@@ -76,40 +76,40 @@ class Board:
         """
         return 0 not in self.board
 
-    def solve(self, callback=callback):
+    def solve(self, callback=default_callback):
         """Main method to solve the Sudoku problem."""
 
         start_time = time.perf_counter()
         while True:
-            self._look_for_single_possible_value()
-            for block in range(9):
-                tiles_block = [
-                    tile
-                    for tile in self.tiles
-                    if tile.block[0] == block and tile.empty
-                ]
-                self._look_for_single_occurence(tiles_block)
-            for row in range(9):
-                tiles_row = [
-                    tile
-                    for tile in self.tiles
-                    if tile.row == row and tile.empty
-                ]
-                self._look_for_single_occurence(tiles_row)
-            for column in range(9):
-                tiles_column = [
-                    tile
-                    for tile in self.tiles
-                    if tile.column == column and tile.empty
-                ]
-            self._look_for_single_occurence(tiles_column)
-
+            self.step()
             callback(self)
-
             if self.solved:
                 break
         finish_time = time.perf_counter()
         print("Solving time:", timedelta(seconds=finish_time - start_time))
+
+    def step(self):
+        """Run one step of the algorithm."""
+        self._look_for_single_possible_value()
+        for block in range(9):
+            tiles_block = [
+                tile
+                for tile in self.tiles
+                if tile.block[0] == block and tile.empty
+            ]
+            self._look_for_single_occurence(tiles_block)
+        for row in range(9):
+            tiles_row = [
+                tile for tile in self.tiles if tile.row == row and tile.empty
+            ]
+            self._look_for_single_occurence(tiles_row)
+        for column in range(9):
+            tiles_column = [
+                tile
+                for tile in self.tiles
+                if tile.column == column and tile.empty
+            ]
+        self._look_for_single_occurence(tiles_column)
 
     def _look_for_single_possible_value(self):
         """Look at the empty tiles of the entire board. To solve the block, we
