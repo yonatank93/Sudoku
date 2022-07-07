@@ -62,4 +62,4 @@ If there is an item in the list of possible values of a tile that is not in the 
 ## Disclaimer
 
 For sure this is not the best algorithm for solving Sudoku.
-For example, this algorithm can solve board 1 and 2 in the data, but cannot for board 3 and 4.
+For example, this algorithm can solve boards 1 to 5 in the data, but cannot for boards 6 to 8.
