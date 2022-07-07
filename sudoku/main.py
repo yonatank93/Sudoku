@@ -1,4 +1,5 @@
 import copy
+import random
 import time
 from datetime import timedelta
 
@@ -53,6 +54,7 @@ class Board:
         assert self.board.shape == (9, 9), (
             "The board should be a 9x9 array-like",
         )
+        self._intermediate_stage = None
 
     @property
     def tiles(self):
@@ -69,24 +71,66 @@ class Board:
         ]
         return tiles
 
+    def _count_occurence(self):
+        """Count how manny time each number from 1 to 9 shows up in the board."""
+        occur = []
+        for val in range(1, 10):
+            occur.append(np.sum(self.board == val))
+        return occur
+
     @property
     def solved(self):
-        """Check if the board is solved. The board is solved when there is no
-        empty tile, represented by zero value.
+        """Check if the board is solved. If the board is solved, each value
+        between 1 and 9 (inclusive) shows up 9 times in the board.
         """
-        return 0 not in self.board
+        occur = np.asarray(self._count_occurence)
+        return np.all(occur == 9)
 
     def solve(self, callback=default_callback):
         """Main method to solve the Sudoku problem."""
 
         start_time = time.perf_counter()
         while True:
+            old_tiles = copy.deepcopy(self.tiles)
             self.step()
             callback(self)
+            new_tiles = copy.deepcopy(self.tiles)
+
+            # Compare the tiles before and after the step
+            if self._tiles_same(old_tiles, new_tiles):
+                # if self._intermediate_stage is None:
+                #     self._intermediate_stage = copy.copy(self.board)
+                # else:
+                #     self.board = copy.copy(self._intermediate_stage)
+
+                # # Randomly place number with lowest occurence in any of its
+                # # possible spots.
+                # lowest_occur_number = self._find_lowest_occurence_number()
+                # tiles = [
+                #     tile
+                #     for tile in self.tiles
+                #     if lowest_occur_number in tile.possible_values
+                # ]
+                # tile = random.sample(tiles, 1)[0]
+                # tile.value = lowest_occur_number
+                # self.board = tile.board
+                print("Current method cannot proceed beyond this point")
+                break
+
             if self.solved:
                 break
+
         finish_time = time.perf_counter()
         print("Solving time:", timedelta(seconds=finish_time - start_time))
+
+    def _find_lowest_occurence_number(self):
+        numbers = np.arange(1, 10)
+        occur = np.array(self._count_occurence())
+        # Get indices of numbers that occur less than 9 times
+        idx_lt_9 = occur < 9
+        # Find the highest occurence less than 9
+        idx_lowest_occur = np.argmin(occur[idx_lt_9])
+        return numbers[idx_lt_9][idx_lowest_occur]
 
     def step(self):
         """Run one step of the algorithm."""
@@ -147,6 +191,25 @@ class Board:
                     tile.value = val
                     self.board = tile.board
                     break
+
+    def _tiles_same(self, tiles1, tiles2):
+        """Compare the tiles, check if they are the same."""
+        tiles1_dict = self._tiles_to_dict_possible_values(tiles1)
+        tiles2_dict = self._tiles_to_dict_possible_values(tiles2)
+        return tiles1_dict == tiles2_dict
+
+    @staticmethod
+    def _tiles_to_dict_possible_values(tiles):
+        """Convert the list of tiles into dictionary. The dictionary only
+        contains the possible values.
+        """
+        tiles_dict = {}
+        for tile in tiles:
+            if tile.empty:
+                tiles_dict.update(
+                    {(tile.row, tile.column): tile.possible_values}
+                )
+        return tiles_dict
 
     def display(self):
         """Display the Sudoku board."""
