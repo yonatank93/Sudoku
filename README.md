@@ -67,4 +67,8 @@ Then, repeat the algorithm above.
 ## Disclaimer
 
 For sure this is not the best algorithm for solving Sudoku.
-For example, this algorithm can solve boards 1 to 10 in the data, but cannot for boards 11
+For example, this algorithm can solve boards 1 to 9 and 11 in the data, but cannot for boards 10
+
+With the previous update, I didn't sort the possible values and it can solve board 10 easily, but not board 11.
+with the current update, the possible values are sorted.
+The solver now can solve board 11 easily, but it struggles to solve board 10.
