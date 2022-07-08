@@ -1,3 +1,7 @@
+"""This example is to give a basic usage of this package to solve a Sudoku
+problem.
+"""
+
 from sudoku import Board
 
 # Write the problem as a list. Zeros represent empty tiles.
