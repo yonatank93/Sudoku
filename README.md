@@ -58,8 +58,13 @@ If there is an item in the list of possible values of a tile that is not in the 
 4. Do the same as step 3 for tiles in the same row and column.
 5. Terminate if all tiles are filled.
 
+Special case:
+If the empty tiles for step ``i`` is the same as of step ``i-1``, then the algorithm above cannot proceed further.
+In this case, find the tile with least number of possible values and set that tile to one of the possible value.
+Then, repeat the algorithm above.
+
 
 ## Disclaimer
 
 For sure this is not the best algorithm for solving Sudoku.
-For example, this algorithm can solve boards 1 to 5 in the data, but cannot for boards 6 to 8.
+For example, this algorithm can solve boards 1 to 10 in the data, but cannot for boards 11
