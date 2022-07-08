@@ -92,7 +92,7 @@ class Tile:
         """Get values that don't appear in a list from 1 to 9."""
         values = np.unique(array)
         values = values[values != 0]  # Remove 0 or the empty tile
-        poss_vals = list(possible_values - set(values))
+        poss_vals = sorted(list(possible_values - set(values)))
         return poss_vals
 
     @property
