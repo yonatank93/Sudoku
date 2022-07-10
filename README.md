@@ -17,7 +17,7 @@ $ pip install Sudoku/
 ``` Python
 In [1]: import json, sudoku
 
-In [2]: data = json.load(open("Sudoku/data/board_1.json", "r"))
+In [2]: data = json.load(open("Sudoku/data/board_01.json", "r"))
 
 In [3]: board = sudoku.Board(data["board"])
 
@@ -59,16 +59,12 @@ If there is an item in the list of possible values of a tile that is not in the 
 5. Terminate if all tiles are filled.
 
 Special case:
-If the empty tiles for step ``i`` is the same as of step ``i-1``, then the algorithm above cannot proceed further.
+If the empty tiles for before and after applying step 1-4 above are the same, then the algorithm above cannot proceed further.
 In this case, find the tile with least number of possible values and set that tile to one of the possible value.
-Then, repeat the algorithm above.
+Then, continue with the algorithm above again.
 
 
 ## Disclaimer
 
-For sure this is not the best algorithm for solving Sudoku.
-For example, this algorithm can solve boards 1 to 9 and 11 in the data, but cannot for boards 10
-
-With the previous update, I didn't sort the possible values and it can solve board 10 easily, but not board 11.
-with the current update, the possible values are sorted.
-The solver now can solve board 11 easily, but it struggles to solve board 10.
+This algorithm works for all examples included with this repo!
+However, this is probably not the best algorithm for solving Sudoku.

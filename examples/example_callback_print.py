@@ -16,7 +16,7 @@ board = Board(data["board"])
 
 # Define a custom callback function
 def callback(board_inst):
-    """This callback function will print how many tiles are still empty."""
+    """This callback function prints how many tiles are still empty."""
     nempty_tile = len(board_inst.empty_tiles)
     print("Iteration:", board_inst.niter, "Number of empty tiles:", nempty_tile)
 

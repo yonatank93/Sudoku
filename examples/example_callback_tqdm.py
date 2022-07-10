@@ -21,7 +21,9 @@ pbar = tqdm(total=81, desc="Completion")
 
 # Define a custom callback function
 def callback(board_inst):
-    """This callback function will print how many tiles are still empty."""
+    """This callback function display a progress bar that shows the completion
+    of the board. This is done by counting the number of empty tiles.
+    """
     nempty_tile = len(board_inst.empty_tiles)
     pbar.n = 0
     pbar.update(81 - nempty_tile)
