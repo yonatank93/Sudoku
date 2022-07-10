@@ -54,7 +54,7 @@ class Board:
         assert self.board.shape == (9, 9), (
             "The board should be a 9x9 array-like",
         )
-        self._intermediate_stage = {}
+        self._intermediate_state = {}
         self.niter = 0
 
     @property
@@ -97,83 +97,89 @@ class Board:
 
         start_time = time.perf_counter()
         while True:
-            old_tiles = copy.deepcopy(self.tiles)
-            self.step()
-            callback(self)
-            new_tiles = copy.deepcopy(self.tiles)
-
-            # Compare the tiles before and after the step
-            if self._tiles_same(old_tiles, new_tiles):
-                if self.niter not in self._intermediate_stage:
-                    self._intermediate_stage.update(
-                        {self.niter: {"board": copy.copy(self.board), "idx": 0}}
-                    )
-                else:
-                    self.board = copy.copy(
-                        self._intermediate_stage[self.niter]["board"]
-                    )
-
-                # Find the empty tile with fewest possible values. Then, set
-                # that tile to one of the number and see if it works.
-                nposs_vals = np.array(
-                    [len(tile.possible_values) for tile in self.empty_tiles]
-                )
-
-                if 0 in nposs_vals:
-                    # There are empty tiles with no possible values. The trial
-                    # fails and need to be reset to the previous stage.
-                    self._intermediate_stage.pop(self.niter)
-                    self.niter = list(self._intermediate_stage)[-1]
-                    # Counter adding niter with 1 so that we can get back to
-                    # the same _intermediate_state.
-                    self.niter -= 1
-                else:
-                    # Worth a try
-                    # Sort the arrays
-                    idx_sorted = np.argsort(nposs_vals)
-                    nposs_vals = nposs_vals[idx_sorted]
-                    tiles = np.array(self.empty_tiles)[idx_sorted]
-
-                    idx_search = self._intermediate_stage[self.niter]["idx"]
-                    # Since we have taken care if there is empty list with 0
-                    # possible value, then the lowest nposs_vals is 2. But, we
-                    # still need to terminate if we exhaust the tiles and
-                    # possible values.
-                    if idx_search < sum(nposs_vals):
-                        # Find which tile and what value to try. We will start
-                        # with the empty tile with lowest possible value. Index
-                        # stored in _intermediate_stage assumes we flatten the
-                        # possible values.
-                        for ii in range(len(nposs_vals)):
-                            nvals = np.sum(nposs_vals[:ii])
-                            if not nvals < idx_search:
-                                idx_tile = ii
-                                idx_val = idx_search - nvals
-                                break
-                        tile = tiles[idx_tile]
-                        tile.value = tile.possible_values[idx_val]
-                        self.board = tile.board
-                        self._intermediate_stage[self.niter]["idx"] += 1
-                    else:
-                        # If on a board we have tried all possible tiles and
-                        # values but still not succeeded, we need to go back 1
-                        # step.
-                        self._intermediate_stage.pop(self.niter)
-                        self.niter = list(self._intermediate_stage)[-1]
-                        # Counter adding niter with 1 so that we can get back to
-                        # the same _intermediate_state.
-                        self.niter -= 1
+            self.step(callback)
 
             if self.solved:
                 break
 
-            self.niter += 1
-
         finish_time = time.perf_counter()
         print("Solving time:", timedelta(seconds=finish_time - start_time))
 
-    def step(self):
+    def step(self, callback=default_callback):
         """Run one step of the algorithm."""
+        # Try updating the tiles by looking up and comparing the lists of
+        # possible values.
+        old_tiles = copy.deepcopy(self.tiles)  # Tiles before the update
+        self._lookup_possible_values()
+        new_tiles = copy.deepcopy(self.tiles)  # Tiles after the update
+
+        # Compare the tiles before and after the update. If the above algorithm
+        # fails to update the tiles, then try setting one of the tile to a
+        # value.
+        if self._tiles_same(old_tiles, new_tiles):
+            # Store the current state so that we can go back latger if needed.
+            self._update_intermediate_state()
+
+            # List the number of possible values for each empty tile.
+            nposs_vals = np.array(
+                [len(tile.possible_values) for tile in self.empty_tiles]
+            )
+
+            if 0 in nposs_vals:
+                # There are empty tiles with no possible values. The trial
+                # fails and need to be reset to the previous state.
+                self._revert_state()
+                print(f"Search fails, reverting to iteration {self.niter}")
+            else:
+                # Worth a try. Find the empty tile with fewest possible values.
+                # Then, set that tile to one of the number and see if it works.
+                # Sort the arrays
+                idx_sorted = np.argsort(nposs_vals)
+                nposs_vals = nposs_vals[idx_sorted]
+                tiles = np.array(self.empty_tiles)[idx_sorted]
+
+                # This index value is to pick the value to set. It is
+                # incremented by 1 if we end up at the same state, so that we
+                # won't try setting the same tile to the same value twice.
+                idx_search = self._intermediate_state[self.niter]["search_idx"]
+
+                # Since we have taken care if there is empty list with 0
+                # possible value, then the lowest nposs_vals is 2. But, we
+                # still need to terminate if we exhaust the tiles and
+                # possible values.
+                if idx_search < sum(nposs_vals):
+                    # Find which tile and what value to try. We will start
+                    # with the empty tile with lowest possible value. Index
+                    # stored in _intermediate_state assumes we flatten the
+                    # possible values.
+                    for ii in range(len(nposs_vals)):
+                        nvals = np.sum(nposs_vals[: ii + 1])
+                        if not nvals < idx_search:
+                            idx_tile = ii
+                            idx_val = idx_search - np.sum(nposs_vals[:ii])
+                            break
+                    tile = tiles[idx_tile]
+                    value = tile.possible_values[idx_val]
+                    print(
+                        f"Try setting tile [{tile.row}, {tile.column}] "
+                        f"to {value}"
+                    )
+                    tile.value = value
+                    self.board = tile.board
+                else:
+                    # If on a board we have tried all possible tiles and
+                    # values but still not succeeded, we need to go back 1
+                    # step.
+                    self._revert_state()
+                    print(
+                        "No more values to try, "
+                        f"reverting to iteration {self.niter + 1}"
+                    )
+        self.niter += 1
+        callback(self)
+
+    def _lookup_possible_values(self):
+        """Update the tiles by looking at the lists of possible values."""
         self._look_for_single_possible_value()
         for block in range(9):
             tiles_block = [
@@ -213,11 +219,10 @@ class Board:
 
     def _look_for_single_occurence(self, tiles_group):
         """Look at a single group (block, row, or column) and see if we can
-        solve any in that group. Unlike in ``_look_for_single_possible_value``,
-        here we look if there is a value in the list of possible values of an
-        empty tile that is not in the list of possible values in other empty
-        tiles in the same group. If such value exists, then we can only put
-        that value in that tile.
+        solve any in that group. We look if there is a value in the list of
+        possible values of an empty tile that is not in the list of possible
+        values in other empty tiles in the same group. If such value exists,
+        then we can only put that value in that tile.
         """
         for tile in tiles_group:
             for val in tile.possible_values:
@@ -231,6 +236,28 @@ class Board:
                     tile.value = val
                     self.board = tile.board
                     break
+
+    def _update_intermediate_state(self):
+        """Update the information of the intermediate state."""
+        if self.niter not in self._intermediate_state:
+            # Store the intermediate state
+            self._intermediate_state.update(
+                {self.niter: {"board": copy.copy(self.board), "search_idx": 0}}
+            )
+        else:
+            # Update the search index so we won't set the same tile with the
+            # same value twice.
+            self._intermediate_state[self.niter]["search_idx"] += 1
+
+    def _revert_state(self):
+        """Revert to the previous state."""
+        # Revert the previous state
+        self._intermediate_state.pop(self.niter)
+        self.niter = list(self._intermediate_state)[-1]
+        self.board = self._intermediate_state[self.niter]["board"]
+        # Counter adding niter with 1 so that we can get back to
+        # the same _intermediate_state.
+        self.niter -= 1
 
     def _tiles_same(self, tiles1, tiles2):
         """Compare the tiles, check if they are the same."""
@@ -265,7 +292,7 @@ class Board:
     @staticmethod
     def _print_one_row(row_array):
         """Print one row of the board."""
-        b = [str(row) if row != 0 else " " for row in row_array]
+        b = [str(el) if el != 0 else " " for el in row_array]
         print(
             "#"
             + f" {b[0]} | {b[1]} | {b[2]} "
