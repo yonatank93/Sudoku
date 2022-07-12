@@ -96,12 +96,8 @@ class Board:
         """Main method to solve the Sudoku problem."""
 
         start_time = time.perf_counter()
-        while True:
+        while not self.solved:
             self.step(callback)
-
-            if self.solved:
-                break
-
         finish_time = time.perf_counter()
         print("Solving time:", timedelta(seconds=finish_time - start_time))
 
