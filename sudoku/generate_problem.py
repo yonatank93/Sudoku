@@ -10,7 +10,7 @@ from .main import Board
 from .utils import _blockPrint, _enablePrint
 
 
-def _create_initial_board():
+def _create_initial_board() -> np.ndarray:
     """Create an initial board to solve by populating randomly populating an empty board.
 
     Returns
@@ -28,7 +28,7 @@ def _create_initial_board():
     return board_init
 
 
-def _solve_board(board):
+def _solve_board(board: np.ndarray) -> np.ndarray:
     """Solve the board.
 
     Returns
@@ -43,7 +43,7 @@ def _solve_board(board):
     return board_solved
 
 
-def _remove_elements(board, nremove):
+def _remove_elements(board: np.ndarray, nremove: int) -> np.ndarray:
     """Randomly remove elements from a solved board.
 
     Parameters
@@ -73,7 +73,7 @@ def _remove_elements(board, nremove):
     return board_problem
 
 
-def _get_ntiles_to_remove(level):
+def _get_ntiles_to_remove(level: int) -> int:
     """Get the number of tiles to remove, given the level of problem requested.
 
     The number of tiles to remove is a random number between (10 * (level-1)), exclusive,
@@ -95,7 +95,7 @@ def _get_ntiles_to_remove(level):
     return nremove
 
 
-def generate_problem(level=3):
+def generate_problem(level: int = 3) -> np.ndarray:
     """Main function to generate a Sudoku problem board.
 
     To generate the problem board, we first solve a randomly generated Sudoku board, then

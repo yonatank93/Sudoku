@@ -1,3 +1,4 @@
+from typing import List
 import numpy as np
 
 possible_values = {1, 2, 3, 4, 5, 6, 7, 8, 9}
@@ -16,7 +17,7 @@ class Tile:
         Column position of the tile.
     """
 
-    def __init__(self, board, row, column):
+    def __init__(self, board: np.ndarray, row: int, column: int):
         self._board = board
         self.row = row
         self.column = column
@@ -24,7 +25,7 @@ class Tile:
         self._value = self._board[self.row, self.column]
 
     @property
-    def block(self):
+    def block(self) -> List:
         """Retrieve the block corresponding to the tile. A block refers to a
         :math:`3 \times 3` block in which no numbers can be repeated in that
         block.
@@ -67,28 +68,28 @@ class Tile:
             return None
 
     @value.setter
-    def value(self, value):
+    def value(self, value: int):
         """Set the value of the tile."""
         self._value = value
         self._board[self.row, self.column] = value
 
     @property
-    def board(self):
+    def board(self) -> np.ndarray:
         """Retrieve the entire board."""
         return self._board
 
     @board.setter
-    def board(self, board):
+    def board(self, board: np.ndarray):
         """Set the entire board."""
         self._board = board
 
     @property
-    def empty(self):
+    def empty(self) -> bool:
         """Check if the tile is empty, i.e., has no value."""
         return not bool(self._board[self.row, self.column])
 
     @staticmethod
-    def _values_not_in_range1to9(array):
+    def _values_not_in_range1to9(array) -> List[int]:
         """Get values that don't appear in a list from 1 to 9."""
         values = np.unique(array)
         values = values[values != 0]  # Remove 0 or the empty tile
@@ -96,7 +97,7 @@ class Tile:
         return poss_vals
 
     @property
-    def possible_values(self):
+    def possible_values(self) -> List[int]:
         """Get a list of possible values we can put in the tile. It returns an
         empty list if the tile is not empty, showing that we cannot put any
         other value in that tile.

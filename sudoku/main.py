@@ -1,7 +1,7 @@
 import copy
-import random
 import time
 from datetime import timedelta
+from typing import List, Callable, Dict
 
 import numpy as np
 
@@ -48,17 +48,15 @@ class Board:
     numbers can be repeated in that block.
     """
 
-    def __init__(self, board):
+    def __init__(self, board: np.ndarray):
         self.board = np.asarray(board)
         self.orig_board = copy.copy(self.board)
-        assert self.board.shape == (9, 9), (
-            "The board should be a 9x9 array-like",
-        )
+        assert self.board.shape == (9, 9), ("The board should be a 9x9 array-like",)
         self._intermediate_state = {}
         self.niter = 0
 
     @property
-    def tiles(self):
+    def tiles(self) -> Tile:
         """Scan the board and create :class:`~sudoku.tile.Tile` instances.
 
         Returns
@@ -67,17 +65,15 @@ class Board:
             A list that contains :class:`~sudoku.tile.Tile` for each tile in
             the board.
         """
-        tiles = [
-            Tile(self.board, row, col) for row in range(9) for col in range(9)
-        ]
+        tiles = [Tile(self.board, row, col) for row in range(9) for col in range(9)]
         return tiles
 
     @property
-    def empty_tiles(self):
+    def empty_tiles(self) -> List[Tile]:
         """List all the empty tiles."""
         return [tile for tile in self.tiles if tile.empty]
 
-    def _count_occurence(self):
+    def _count_occurence(self) -> List[int]:
         """Count how manny time each number from 1 to 9 shows up in the board."""
         occur = []
         for val in range(1, 10):
@@ -85,14 +81,14 @@ class Board:
         return occur
 
     @property
-    def solved(self):
+    def solved(self) -> np.bool_:
         """Check if the board is solved. If the board is solved, each value
         between 1 and 9 (inclusive) shows up 9 times in the board.
         """
         occur = np.asarray(self._count_occurence())
         return np.all(occur == 9)
 
-    def solve(self, callback=default_callback):
+    def solve(self, callback: Callable = default_callback):
         """Main method to solve the Sudoku problem."""
 
         start_time = time.perf_counter()
@@ -101,7 +97,7 @@ class Board:
         finish_time = time.perf_counter()
         print("Solving time:", timedelta(seconds=finish_time - start_time))
 
-    def step(self, callback=default_callback):
+    def step(self, callback: Callable = default_callback):
         """Run one step of the algorithm."""
         # Try updating the tiles by looking up and comparing the lists of
         # possible values.
@@ -156,10 +152,7 @@ class Board:
                             break
                     tile = tiles[idx_tile]
                     value = tile.possible_values[idx_val]
-                    print(
-                        f"Try setting tile [{tile.row}, {tile.column}] "
-                        f"to {value}"
-                    )
+                    print(f"Try setting tile [{tile.row}, {tile.column}] " f"to {value}")
                     tile.value = value
                     self.board = tile.board
                 else:
@@ -179,21 +172,15 @@ class Board:
         self._look_for_single_possible_value()
         for block in range(9):
             tiles_block = [
-                tile
-                for tile in self.tiles
-                if tile.block[0] == block and tile.empty
+                tile for tile in self.tiles if tile.block[0] == block and tile.empty
             ]
             self._look_for_single_occurence(tiles_block)
         for row in range(9):
-            tiles_row = [
-                tile for tile in self.tiles if tile.row == row and tile.empty
-            ]
+            tiles_row = [tile for tile in self.tiles if tile.row == row and tile.empty]
             self._look_for_single_occurence(tiles_row)
         for column in range(9):
             tiles_column = [
-                tile
-                for tile in self.tiles
-                if tile.column == column and tile.empty
+                tile for tile in self.tiles if tile.column == column and tile.empty
             ]
         self._look_for_single_occurence(tiles_column)
 
@@ -213,7 +200,7 @@ class Board:
             if not n:
                 break
 
-    def _look_for_single_occurence(self, tiles_group):
+    def _look_for_single_occurence(self, tiles_group: List[Tile]):
         """Look at a single group (block, row, or column) and see if we can
         solve any in that group. We look if there is a value in the list of
         possible values of an empty tile that is not in the list of possible
@@ -255,23 +242,21 @@ class Board:
         # the same _intermediate_state.
         self.niter -= 1
 
-    def _tiles_same(self, tiles1, tiles2):
+    def _tiles_same(self, tiles1: List[Tile], tiles2: List[Tile]):
         """Compare the tiles, check if they are the same."""
         tiles1_dict = self._tiles_to_dict_possible_values(tiles1)
         tiles2_dict = self._tiles_to_dict_possible_values(tiles2)
         return tiles1_dict == tiles2_dict
 
     @staticmethod
-    def _tiles_to_dict_possible_values(tiles):
+    def _tiles_to_dict_possible_values(tiles: List[Tile]) -> Dict:
         """Convert the list of tiles into dictionary. The dictionary only
         contains the possible values.
         """
         tiles_dict = {}
         for tile in tiles:
             if tile.empty:
-                tiles_dict.update(
-                    {(tile.row, tile.column): tile.possible_values}
-                )
+                tiles_dict.update({(tile.row, tile.column): tile.possible_values})
         return tiles_dict
 
     def display(self):
