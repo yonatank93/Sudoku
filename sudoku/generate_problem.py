@@ -6,7 +6,7 @@ will be (more likely to be) solvable.
 
 from copy import deepcopy
 import numpy as np
-from .main import Board
+from .board import Board
 from .utils import _blockPrint, _enablePrint
 
 

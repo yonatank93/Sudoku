@@ -1,4 +1,4 @@
-from .main import Board
+from .board import Board
 from .generate_problem import generate_problem
 
 __all__ = ["Board"]
