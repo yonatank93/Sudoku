@@ -1,9 +1,7 @@
 import numpy as np
 
-empty_char = ["_", "-", " ", "0"]  # These characters indicate that the tile is empty
 
-
-class Reader:
+class UserInput:
     """Interactive method to input the sudoku board.
 
     Input numbers in each row without any space. Each row should be 9 characters long.
@@ -19,6 +17,8 @@ class Reader:
     * Each input row should contain 9 characters, including the "empty" characters.
     * Each number 1-9 should only appear at most 1 time in each input row.
     """
+
+    empty_char = ["_", "-", " ", "0"]  # These characters indicate that the tile is empty
 
     def __init__(self):
         print("Input each row of the board below:")
