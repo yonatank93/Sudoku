@@ -33,4 +33,5 @@ setuptools.setup(
     classifiers=["Programming Language :: Python :: 3"],
     include_package_data=True,
     python_requires=">=3.6",
+    entry_points={"console_scripts": ["sudoku=sudoku.main:main"]},
 )
