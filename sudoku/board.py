@@ -88,16 +88,17 @@ class Board:
         occur = np.asarray(self._count_occurence())
         return np.all(occur == 9)
 
-    def solve(self, callback: Callable = default_callback):
+    def solve(self, callback: Callable = default_callback, verbose: bool = True):
         """Main method to solve the Sudoku problem."""
 
         start_time = time.perf_counter()
         while not self.solved:
             self.step(callback)
         finish_time = time.perf_counter()
-        print("Solving time:", timedelta(seconds=finish_time - start_time))
+        if verbose:
+            print("Solving time:", timedelta(seconds=finish_time - start_time))
 
-    def step(self, callback: Callable = default_callback):
+    def step(self, callback: Callable = default_callback, verbose: bool = True):
         """Run one step of the algorithm."""
         # Try updating the tiles by looking up and comparing the lists of
         # possible values.
@@ -121,7 +122,8 @@ class Board:
                 # There are empty tiles with no possible values. The trial
                 # fails and need to be reset to the previous state.
                 self._revert_state()
-                print(f"Search fails, reverting to iteration {self.niter}")
+                if verbose:
+                    print(f"Search fails, reverting to iteration {self.niter}")
             else:
                 # Worth a try. Find the empty tile with fewest possible values.
                 # Then, set that tile to one of the number and see if it works.
@@ -152,7 +154,10 @@ class Board:
                             break
                     tile = tiles[idx_tile]
                     value = tile.possible_values[idx_val]
-                    print(f"Try setting tile [{tile.row}, {tile.column}] " f"to {value}")
+                    if verbose:
+                        print(
+                            f"Try setting tile [{tile.row}, {tile.column}] " f"to {value}"
+                        )
                     tile.value = value
                     self.board = tile.board
                 else:
@@ -160,10 +165,11 @@ class Board:
                     # values but still not succeeded, we need to go back 1
                     # step.
                     self._revert_state()
-                    print(
-                        "No more values to try, "
-                        f"reverting to iteration {self.niter + 1}"
-                    )
+                    if verbose:
+                        print(
+                            "No more values to try, "
+                            f"reverting to iteration {self.niter + 1}"
+                        )
         self.niter += 1
         callback(self)
 
