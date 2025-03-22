@@ -66,11 +66,10 @@
 
         // Fetch Sudoku problem from Flask backend
         document.addEventListener("DOMContentLoaded", function () {
-            // Attach event listener to "Generate Problem" button
-            document.getElementById("generateBtn").addEventListener("click", function() {
-                const level = document.getElementById("difficulty").value;  // Get difficulty from dropdown
+            document.getElementById("generateBtn").addEventListener("click", function () {
+                const level = document.getElementById("difficulty").value;
 
-                fetch(`/generate?level=${level}`)  // Fetch Sudoku problem from Flask backend
+                fetch(`/generate?level=${level}`)
                     .then(response => response.json())
                     .then(data => {
                         const problem = data.problem;
@@ -78,7 +77,13 @@
                             for (let j = 0; j < 9; j++) {
                                 let cell = document.querySelector(`input[name="cell${i}${j}"]`);
                                 if (cell) {
-                                    cell.value = problem[i][j] > 0 ? problem[i][j] : '';
+                                    if (problem[i][j] > 0) {
+                                        cell.value = problem[i][j];  // Fill pre-defined numbers
+                                        cell.setAttribute("readonly", true); // Make them readonly
+                                    } else {
+                                        cell.value = '';  // Keep empty cells editable
+                                        cell.removeAttribute("readonly"); // Ensure user can edit these
+                                    }
                                 }
                             }
                         }
@@ -129,7 +134,7 @@
                 <td>
 		  <input type="text" name="cell{{i}}{{j}}" size="1" maxlength="1"
 			 oninput="this.value = this.value.replace(/[^1-9]/g, '')"
-                         value="{{ solution[i][j] if solution[i][j] > 0 else '' }}">
+			 value="{{ solution[i][j] if solution[i][j] > 0 else '' }}">
                 </td>
                 {% endfor %}
             </tr>
