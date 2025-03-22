@@ -1,5 +1,5 @@
-from flask import Flask, render_template, request
-from sudoku import Board
+from flask import Flask, render_template, request, jsonify
+from sudoku import generate_problem, Board
 import numpy as np
 
 app = Flask(__name__)
@@ -30,6 +30,12 @@ def solve_sudoku(sudoku_problem):
     board = Board(sudoku_problem)  # Create a board object
     board.solve(verbose=False)  # Solve the board
     return board.board
+
+
+@app.route("/generate", methods=["GET"])
+def generate_sudoku():
+    problem = generate_problem(level=3)  # Call your problem generator function
+    return jsonify({"problem": problem.tolist()})  # Return as JSON
 
 
 if __name__ == "__main__":
