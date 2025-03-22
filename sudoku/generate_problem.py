@@ -93,12 +93,15 @@ def _remove_elements(board: np.ndarray, nremove: int) -> np.ndarray:
 def _get_ntiles_to_remove(level: int) -> int:
     """Get the number of tiles to remove, given the level of problem requested.
 
-    The number of tiles to remove is a random number between (10 * (level-1)), exclusive,
-    to (10 * level), inclusive.
+    Here, we decide on the maximum and minimum number of tiles to retain in the board,
+    then we partition the range into bins, each corresponding to a lower bound and upper
+    bound of the number of tiles to remove for each level. For a given level, the number
+    of tiles removed is a random number between this lower and upper bounds, with some
+    small padding to separate difficulty of subsequent levels.
 
     Parameters
     ----------
-    level int range(1, 9)
+    level: int range(1, 5)
         Requested level of difficulty. Lower number means easier level of difficulty.
 
     Returns
@@ -106,9 +109,22 @@ def _get_ntiles_to_remove(level: int) -> int:
     int
         Number of tiles to remove.
     """
-    # Initially, I set the level to go from 1 to 8
-    lb = (level - 1) * 10 + 1  # inclusive
-    ub = level * 10 + 1  # exclusive
+    pad = 3  # Padding to make subsequent levels more distinct
+    # These are the maximum and minimum number of tiles retained in the board
+    min_retained = 19 - pad  # Exclusive
+    max_retained = 70 + pad  # Inclusive
+    # These are the minimum and maximum number of tiles to remove
+    min_removed = 81 - max_retained
+    max_removed = 81 - min_retained
+    nbins = 5  # Level ranges from 1 to 10 (both inclusive)
+    # Compute bins
+    bin_edges = np.linspace(min_removed, max_removed, nbins + 1)
+    bins = [
+        (int(np.round(bin_edges[i]) + 3), int(np.round(bin_edges[i + 1])) - 3)
+        for i in range(len(bin_edges) - 1)
+    ]
+    # Given level, we randomly select the number of tiles to remove
+    lb, ub = bins[level - 1]
     nremove = np.random.randint(lb, ub)
     return nremove
 
@@ -118,12 +134,10 @@ def generate_problem(level: int = 3) -> np.ndarray:
 
     To generate the problem board, we first solve a randomly generated Sudoku board, then
     randomly removing the tiles. The requested level determine the number of empty tiles.
-    The number of tiles to remove is a random number between (10 * (level-1)), exclusive,
-    to (10 * level), inclusive.
 
     Parameters
     ----------
-    level int range(1, 7)
+    level: int range(1, 5)
         Requested level of difficulty. Lower number means easier level of difficulty.
 
     Returns
@@ -132,7 +146,7 @@ def generate_problem(level: int = 3) -> np.ndarray:
         A generated Sudoku problem board.
     """
     assert isinstance(level, int), "Difficulty level can only be an integer number"
-    assert 1 <= level <= 7, "Difficulty level ranges from 1 to 8 only"
+    assert 1 <= level <= 5, "Difficulty level ranges from 1 to 5 only"
     while True:
         try:
             _blockPrint()
