@@ -38,6 +38,7 @@
             border-right: none
         }
     </style>
+
     <script>
         // Store difficulty before submitting form
         function storeDifficulty() {
@@ -51,7 +52,6 @@
 
             if (savedDifficulty) {
                 difficultySlider.value = savedDifficulty;
-                updateDifficultyLabel(savedDifficulty);
             }
         });
 
@@ -60,14 +60,8 @@
             document.querySelectorAll('input[type="text"]').forEach(input => input.value = '');
 
             if (resetDifficulty) {
-                document.getElementById("difficulty").value = 3; // Default to Hard
-                updateDifficultyLabel(3);
+                document.getElementById("difficulty").value = 3;
             }
-        }
-
-        // Update difficulty label (Easy - Hard)
-        function updateDifficultyLabel(value) {
-            document.getElementById("difficultyLabel").innerText = value == 1 ? "Easy" : value == 2 ? "Medium" : "Hard";
         }
 
         document.addEventListener("DOMContentLoaded", function () {
@@ -94,8 +88,27 @@
     </script>
 </head>
 <body>
-    <h1>Sudoku Solver</h1>
+    <h1>Play Sudoku!</h1>
+    <p style="font-size: 20px; font-weight: bold; text-decoration: underline;">
+        Instructions:
+    </p>
+    <p>
+        Select a difficulty level using the slider, click <strong>"Generate Problem"</strong>, and enjoy solving the Sudoku!
+        <br>
+        Or, enter your own Sudoku puzzle and click <strong>"Solve"</strong> to find the solution.
+    </p>
+
     <form method="POST" onsubmit="storeDifficulty()">
+	<!-- Difficulty Slider -->
+	<label for="difficulty"><strong>Difficulty</strong>:</label>
+	<span>Easy</span> <!-- Left label -->
+	<input type="range" id="difficulty" min="1" max="5" value="3" step="1">
+	<span>Hard</span> <!-- Right label -->
+
+	<!-- Generate Problem Button -->
+	<button type="button" id="generateBtn">Generate Problem</button>
+	<br><br>
+
         <table border="1">
             {% for i in range(9) %}
             <tr>
@@ -109,15 +122,6 @@
             {% endfor %}
         </table>
         <br>
-
-	<!-- Generate Problem Button -->
-	<button type="button" id="generateBtn">Generate Problem</button>
-	<!-- Difficulty Slider -->
-	<label for="difficulty">Difficulty:</label>
-	<span>Easy</span> <!-- Left label -->
-	<input type="range" id="difficulty" min="1" max="5" value="3" step="1" oninput="updateDifficultyLabel(this.value)">
-	<span>Hard</span> <!-- Right label -->
-	<br>
 
 	<!-- Solve Button -->
         <button type="submit">Solve</button>
