@@ -37,6 +37,10 @@
         td:nth-last-child(1) {
             border-right: none
         }
+	.prefilled {
+	    background-color: lightgray; /* Highlight prefilled cells */
+	    font-weight: bold; /* Make text bold */
+	}
     </style>
 
     <script>
@@ -80,9 +84,11 @@
                                     if (problem[i][j] > 0) {
                                         cell.value = problem[i][j];  // Fill pre-defined numbers
                                         cell.setAttribute("readonly", true); // Make them readonly
+					cell.classList.add("prefilled"); // Apply highlight & bold
                                     } else {
                                         cell.value = '';  // Keep empty cells editable
                                         cell.removeAttribute("readonly"); // Ensure user can edit these
+					cell.classList.remove("prefilled"); // Remove highlight if needed
                                     }
                                 }
                             }
