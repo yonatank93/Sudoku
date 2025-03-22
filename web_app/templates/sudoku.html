@@ -60,13 +60,26 @@
         });
 
         // Clear all input fields
-        function clearAll(resetDifficulty = true) {
-            document.querySelectorAll('input[type="text"]').forEach(input => input.value = '');
+        function resetAll(resetDifficulty = true) {
+	    document.querySelectorAll('input[type="text"]').forEach(cell => {
+		cell.value = '';  // Clear all values
+		cell.removeAttribute("readonly");  // Allow editing all cells
+		cell.classList.remove("prefilled");  // Remove highlight styles
+	    });
 
-            if (resetDifficulty) {
-                document.getElementById("difficulty").value = 3;
-            }
-        }
+	    if (resetDifficulty) {
+		document.getElementById("difficulty").value = 3;
+	    }
+	}
+
+      	// Clear only user input fields
+        function clearUserInputs() {
+	    document.querySelectorAll('input[type="text"]').forEach(cell => {
+		if (!cell.classList.contains("prefilled")) {
+		    cell.value = ''; // Clear only user-filled cells
+		}
+	    });
+	}
 
         // Fetch Sudoku problem from Flask backend
         document.addEventListener("DOMContentLoaded", function () {
@@ -148,11 +161,15 @@
         </table>
         <br>
 
+	<!-- Clear User Input Button -->
+	<button type="button" onclick="clearUserInputs()">Clear Input</button>
+	<br><br>
+
 	<!-- Solve Button -->
-        <button type="submit">Solve</button>
+        <button type="submit"><strong>Solve</strong></button>
 
         <!-- Reset Button (clears the input fields) -->
-	<button type="button" onclick="clearAll(false)">Reset</button>
+	<button type="button" onclick="resetAll()">Reset All</button>
     </form>
 </body>
 </html>
