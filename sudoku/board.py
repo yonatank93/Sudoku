@@ -86,7 +86,27 @@ class Board:
         between 1 and 9 (inclusive) shows up 9 times in the board.
         """
         occur = np.asarray(self._count_occurence())
-        return np.all(occur == 9)
+        if np.all(occur == 9):
+            board = self.board
+            # Check each row
+            for row in board:
+                if sorted(row) != list(range(1, 10)):
+                    return False
+
+            # Check each column
+            for col in range(9):
+                if sorted(board[row][col] for row in range(9)) != list(range(1, 10)):
+                    return False
+
+            # Check each 3x3 subgrid
+            for i in range(0, 9, 3):
+                for j in range(0, 9, 3):
+                    subgrid = [board[i + x][j + y] for x in range(3) for y in range(3)]
+                    if sorted(subgrid) != list(range(1, 10)):
+                        return False
+            return True
+        else:
+            return False
 
     def solve(self, callback: Callable = default_callback, verbose: bool = True):
         """Main method to solve the Sudoku problem."""
