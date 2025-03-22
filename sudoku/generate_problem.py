@@ -18,13 +18,30 @@ def _create_initial_board() -> np.ndarray:
     np.ndarray
         An initial board that is mostly empty, with randomly populated tiles.
     """
-    # Randomly populating an empty board
-    nvals = np.random.randint(1, 5)
-    vals = np.random.randint(1, 10, nvals)
-    idx_add = np.random.randint(0, 9, (nvals, 2))
+    nums = np.arange(1, 10)  # These are possible numbers in the board
+    # Initialize empty board
     board_init = np.zeros((9, 9), dtype=int)
-    for val, idx in zip(vals, idx_add):
-        board_init[idx[0], idx[1]] = val
+    # Populate row 0
+    board_init[0] = np.random.permutation(nums)
+    # Populate block 0
+    possible_nums = list(set(nums) - set(board_init[0, :3]))
+    board_init[1:3, :3] = np.random.permutation(possible_nums).reshape(2, 3)
+    # Populate column 0
+    possible_nums = list(set(nums) - set(board_init[:3, 0]))
+    board_init[3:, 0] = np.random.permutation(possible_nums)
+    # Populate block 4
+    possible_nums = set(nums) - set(board_init[0, 3:6]) - set(board_init[3:6, 0])
+    possible_nums = np.append(
+        np.zeros(9 - len(possible_nums), dtype=int), list(possible_nums)
+    )  # Zeros padding
+    board_init[3:6, 3:6] = np.random.permutation(possible_nums).reshape(3, 3)
+    # Populate block 8
+    possible_nums = set(nums) - set(board_init[0, 6:]) - set(board_init[6:, 0])
+    possible_nums = np.append(
+        np.zeros(9 - len(possible_nums), dtype=int), list(possible_nums)
+    )  # Zeros padding
+    board_init[6:, 6:] = np.random.permutation(possible_nums).reshape(3, 3)
+
     return board_init
 
 
@@ -89,6 +106,7 @@ def _get_ntiles_to_remove(level: int) -> int:
     int
         Number of tiles to remove.
     """
+    # Initially, I set the level to go from 1 to 8
     lb = (level - 1) * 10 + 1  # inclusive
     ub = level * 10 + 1  # exclusive
     nremove = np.random.randint(lb, ub)
@@ -105,7 +123,7 @@ def generate_problem(level: int = 3) -> np.ndarray:
 
     Parameters
     ----------
-    level int range(1, 9)
+    level int range(1, 7)
         Requested level of difficulty. Lower number means easier level of difficulty.
 
     Returns
@@ -114,7 +132,7 @@ def generate_problem(level: int = 3) -> np.ndarray:
         A generated Sudoku problem board.
     """
     assert isinstance(level, int), "Difficulty level can only be an integer number"
-    assert 1 <= level <= 8, "Difficulty level ranges from 1 to 8 only"
+    assert 1 <= level <= 7, "Difficulty level ranges from 1 to 8 only"
     while True:
         try:
             _blockPrint()
