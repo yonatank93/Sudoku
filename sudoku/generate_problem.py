@@ -111,7 +111,7 @@ def _get_ntiles_to_remove(level: int) -> int:
     """
     pad = 3  # Padding to make subsequent levels more distinct
     # These are the maximum and minimum number of tiles retained in the board
-    min_retained = 19 - pad  # Exclusive
+    min_retained = 15 - pad  # Exclusive
     max_retained = 70 + pad  # Inclusive
     # These are the minimum and maximum number of tiles to remove
     min_removed = 81 - max_retained
