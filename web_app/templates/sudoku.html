@@ -39,37 +39,63 @@
         }
     </style>
     <script>
-        function clearInputs() {
-            const inputs = document.querySelectorAll('input[type="text"]');
-            inputs.forEach(input => input.value = '');
+        // Store difficulty before submitting form
+        function storeDifficulty() {
+            localStorage.setItem("difficulty", document.getElementById("difficulty").value);
+        }
+
+        // Restore difficulty after page reload
+        document.addEventListener("DOMContentLoaded", function () {
+            const difficultySlider = document.getElementById("difficulty");
+            const savedDifficulty = localStorage.getItem("difficulty");
+
+            if (savedDifficulty) {
+                difficultySlider.value = savedDifficulty;
+                updateDifficultyLabel(savedDifficulty);
+            }
+        });
+
+        // Modify clearInputs to allow keeping difficulty
+        function clearInputs(resetDifficulty = true) {
+            document.querySelectorAll('input[type="text"]').forEach(input => input.value = '');
+
+            if (resetDifficulty) {
+                document.getElementById("difficulty").value = 3; // Default to Hard
+                updateDifficultyLabel(3);
+            }
+        }
+
+        // Update difficulty label (Easy - Hard)
+        function updateDifficultyLabel(value) {
+            document.getElementById("difficultyLabel").innerText = value == 1 ? "Easy" : value == 2 ? "Medium" : "Hard";
         }
 
         document.addEventListener("DOMContentLoaded", function () {
-            // Ensure the script runs only after the page is fully loaded
+            // Attach event listener to "Generate Problem" button
             document.getElementById("generateBtn").addEventListener("click", function() {
-		fetch("/generate")  // Call the Flask backend
-                    .then(response => response.json())  // Convert response to JSON
-                    .then(data => {
-			const problem = data.problem;  // Extract the problem grid
+                const level = document.getElementById("difficulty").value;  // Get difficulty from dropdown
 
-			// Loop through the 9x9 grid and update the input fields
-			for (let i = 0; i < 9; i++) {
+                fetch(`/generate?level=${level}`)  // Fetch Sudoku problem from Flask backend
+                    .then(response => response.json())
+                    .then(data => {
+                        const problem = data.problem;
+                        for (let i = 0; i < 9; i++) {
                             for (let j = 0; j < 9; j++) {
-				let cell = document.querySelector(`input[name="cell${i}${j}"]`);
-				if (cell) {
-                                    cell.value = problem[i][j] > 0 ? problem[i][j] : '';  // Set value or keep empty
-				}
+                                let cell = document.querySelector(`input[name="cell${i}${j}"]`);
+                                if (cell) {
+                                    cell.value = problem[i][j] > 0 ? problem[i][j] : '';
+                                }
                             }
-			}
+                        }
                     })
                     .catch(error => console.error("Error fetching Sudoku problem:", error));
             });
-	});
+        });
     </script>
 </head>
 <body>
     <h1>Sudoku Solver</h1>
-    <form method="POST">
+    <form method="POST" onsubmit="storeDifficulty()">
         <table border="1">
             {% for i in range(9) %}
             <tr>
@@ -83,14 +109,21 @@
             {% endfor %}
         </table>
         <br>
+
 	<!-- Generate Problem Button -->
 	<button type="button" id="generateBtn">Generate Problem</button>
+	<!-- Difficulty Slider -->
+	<label for="difficulty">Difficulty:</label>
+	<span>Easy</span> <!-- Left label -->
+	<input type="range" id="difficulty" min="1" max="5" value="3" step="1" oninput="updateDifficultyLabel(this.value)">
+	<span>Hard</span> <!-- Right label -->
 	<br>
+
 	<!-- Solve Button -->
         <button type="submit">Solve</button>
 
         <!-- Reset Button (clears the input fields) -->
-	<button type="button" onclick="clearInputs()">Reset</button>
+	<button type="button" onclick="clearInputs(false)">Reset</button>
     </form>
 </body>
 </html>

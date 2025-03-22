@@ -34,8 +34,11 @@ def solve_sudoku(sudoku_problem):
 
 @app.route("/generate", methods=["GET"])
 def generate_sudoku():
-    problem = generate_problem(level=3)  # Call your problem generator function
-    return jsonify({"problem": problem.tolist()})  # Return as JSON
+    level = request.args.get(
+        "level", default=3, type=int
+    )  # Get level from query parameters
+    problem = generate_problem(level)
+    return jsonify({"problem": problem.tolist()})
 
 
 if __name__ == "__main__":
