@@ -12,6 +12,7 @@ $ git clone https://github.com/yonatank93/Sudoku.git
 $ pip install Sudoku/
 ```
 
+
 ## Example
 
 ``` Python
@@ -48,6 +49,62 @@ In [5]: board.display()
 In [6]:
 ```
 
+
+### Command-Line Interface
+
+A command-line interface allows users to input a Sudoku problem and solve it.
+Below is an example command to solve the same Sudoku problem as above.
+Each row of the Sudoku puzzle must be entered manually as a continuous string of nine digits, using "0" to denote empty tiles.
+No spaces or separators are needed between numbers in the same row.
+
+```bash
+$ sudoku-solve
+Input each row of the board below:
+478693152
+526718493
+130425076
+300147009
+000986000
+000532000
+000369000
+003874900
+067251380
+Solving time: 0:00:00.016867
+Solution:
+#####################################
+# 4 | 7 | 8 # 6 | 9 | 3 # 1 | 5 | 2 #
+#-----------#-----------#-----------#
+# 5 | 2 | 6 # 7 | 1 | 8 # 4 | 9 | 3 #
+#-----------#-----------#-----------#
+# 1 | 3 | 9 # 4 | 2 | 5 # 8 | 7 | 6 #
+#####################################
+# 3 | 8 | 5 # 1 | 4 | 7 # 6 | 2 | 9 #
+#-----------#-----------#-----------#
+# 7 | 4 | 2 # 9 | 8 | 6 # 5 | 3 | 1 #
+#-----------#-----------#-----------#
+# 6 | 9 | 1 # 5 | 3 | 2 # 7 | 4 | 8 #
+#####################################
+# 8 | 5 | 4 # 3 | 6 | 9 # 2 | 1 | 7 #
+#-----------#-----------#-----------#
+# 2 | 1 | 3 # 8 | 7 | 4 # 9 | 6 | 5 #
+#-----------#-----------#-----------#
+# 9 | 6 | 7 # 2 | 5 | 1 # 3 | 8 | 4 #
+#####################################
+```
+
+
+### Web App
+
+A web app is also included, built with [Flask](https://flask.palletsprojects.com/en/stable/).
+The web app allows users to play Sudoku and solve problems using a graphical user interface (GUI), if preferred.
+To start the server, execute one of the following commands:
+
+```bash
+$ python Sudoku/sudoku/web_app/app.py
+$ sudoku-play
+```
+
+
 ## Algorithm
 
 1. For each empty tile, list possible values by only looking at the block, row, and collumn corresponding to that tile.
@@ -68,3 +125,8 @@ Then, continue with the algorithm above again.
 
 This algorithm works for all examples included with this repo!
 However, this is probably not the best algorithm for solving Sudoku.
+
+
+## Contact
+
+Feel free to reach out to my email: kurniawanyo@outlook.com
