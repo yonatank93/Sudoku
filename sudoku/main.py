@@ -10,16 +10,26 @@ def main(argv=None):
         "-s",
         "--show-init",
         dest="show_init",
-        default=False,
+        action="store_true",
         help="Show initial, unsolved  board",
+    )
+    arg_parser.add_argument(
+        "-v",
+        "--verbose",
+        dest="verbose",
+        action="store_true",
+        help="Show the steps of the solving process",
     )
     args = arg_parser.parse_args(argv)
 
     board_input = UserInput()
     board = Board(board_input.board)
     if args.show_init:
+        print()
+        print("Problem:")
         board.display()
+        print()
 
-    board.solve()
+    board.solve(verbose=args.verbose)
     print("Solution:")
     board.display()

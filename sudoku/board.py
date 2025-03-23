@@ -86,18 +86,39 @@ class Board:
         between 1 and 9 (inclusive) shows up 9 times in the board.
         """
         occur = np.asarray(self._count_occurence())
-        return np.all(occur == 9)
+        if np.all(occur == 9):
+            board = self.board
+            # Check each row
+            for row in board:
+                if sorted(row) != list(range(1, 10)):
+                    return False
 
-    def solve(self, callback: Callable = default_callback):
+            # Check each column
+            for col in range(9):
+                if sorted(board[row][col] for row in range(9)) != list(range(1, 10)):
+                    return False
+
+            # Check each 3x3 subgrid
+            for i in range(0, 9, 3):
+                for j in range(0, 9, 3):
+                    subgrid = [board[i + x][j + y] for x in range(3) for y in range(3)]
+                    if sorted(subgrid) != list(range(1, 10)):
+                        return False
+            return True
+        else:
+            return False
+
+    def solve(self, callback: Callable = default_callback, verbose: bool = False):
         """Main method to solve the Sudoku problem."""
 
         start_time = time.perf_counter()
         while not self.solved:
-            self.step(callback)
+            self.step(callback, verbose)
         finish_time = time.perf_counter()
-        print("Solving time:", timedelta(seconds=finish_time - start_time))
+        if verbose:
+            print("Solving time:", timedelta(seconds=finish_time - start_time))
 
-    def step(self, callback: Callable = default_callback):
+    def step(self, callback: Callable = default_callback, verbose: bool = False):
         """Run one step of the algorithm."""
         # Try updating the tiles by looking up and comparing the lists of
         # possible values.
@@ -121,7 +142,8 @@ class Board:
                 # There are empty tiles with no possible values. The trial
                 # fails and need to be reset to the previous state.
                 self._revert_state()
-                print(f"Search fails, reverting to iteration {self.niter}")
+                if verbose:
+                    print(f"Search fails, reverting to iteration {self.niter}")
             else:
                 # Worth a try. Find the empty tile with fewest possible values.
                 # Then, set that tile to one of the number and see if it works.
@@ -152,7 +174,10 @@ class Board:
                             break
                     tile = tiles[idx_tile]
                     value = tile.possible_values[idx_val]
-                    print(f"Try setting tile [{tile.row}, {tile.column}] " f"to {value}")
+                    if verbose:
+                        print(
+                            f"Try setting tile [{tile.row}, {tile.column}] " f"to {value}"
+                        )
                     tile.value = value
                     self.board = tile.board
                 else:
@@ -160,10 +185,11 @@ class Board:
                     # values but still not succeeded, we need to go back 1
                     # step.
                     self._revert_state()
-                    print(
-                        "No more values to try, "
-                        f"reverting to iteration {self.niter + 1}"
-                    )
+                    if verbose:
+                        print(
+                            "No more values to try, "
+                            f"reverting to iteration {self.niter + 1}"
+                        )
         self.niter += 1
         callback(self)
 
