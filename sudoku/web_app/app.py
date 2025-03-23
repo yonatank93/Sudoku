@@ -56,5 +56,10 @@ def check_solution():
     return jsonify({"solved": solved})
 
 
-if __name__ == "__main__":
+# Add the main() function to start the Flask app
+def main():
     app.run(debug=True)
+
+
+if __name__ == "__main__":
+    main()
