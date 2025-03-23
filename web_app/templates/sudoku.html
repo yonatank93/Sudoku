@@ -85,6 +85,67 @@
             });
         });
 
+        // Disable buttons when the form is submitted (Solve button)
+        document.addEventListener("DOMContentLoaded", function () {
+	    // Check if the buttons should be disabled on page load
+	    if (localStorage.getItem("buttonsDisabled") === "true") {
+		disableButtons();
+	    }
+
+	    // Disable buttons when the form is submitted (Solve button)
+	    document.querySelector("form").addEventListener("submit", function () {
+		disableButtons();
+	    });
+
+	    // Re-enable buttons when Generate Problem is clicked
+	    document.getElementById("generateProblem").addEventListener("click", function () {
+		enableButtons();
+	    });
+
+	    // Re-enable buttons when Reset All is clicked
+	    document.querySelector("button[onclick='resetAll()']").addEventListener("click", function () {
+		enableButtons();
+	    });
+
+	    // Function to disable buttons
+	    function disableButtons() {
+		const checkSolutionBtn = document.getElementById("checkSolution");
+		const clearInputBtn = document.querySelector("button[onclick='clearUserInputs()']");
+
+		// Disable buttons
+		checkSolutionBtn.disabled = true;
+		clearInputBtn.disabled = true;
+
+		// Gray out buttons using CSS
+		checkSolutionBtn.style.backgroundColor = "gray";
+		checkSolutionBtn.style.cursor = "not-allowed";
+		clearInputBtn.style.backgroundColor = "gray";
+		clearInputBtn.style.cursor = "not-allowed";
+
+		// Save the disabled state in localStorage
+		localStorage.setItem("buttonsDisabled", "true");
+	    }
+
+	    // Function to re-enable buttons
+	    function enableButtons() {
+		const checkSolutionBtn = document.getElementById("checkSolution");
+		const clearInputBtn = document.querySelector("button[onclick='clearUserInputs()']");
+
+		// Enable buttons
+		checkSolutionBtn.disabled = false;
+		clearInputBtn.disabled = false;
+
+		// Reset button styles
+		checkSolutionBtn.style.backgroundColor = ""; // Default button color
+		checkSolutionBtn.style.cursor = "pointer";
+		clearInputBtn.style.backgroundColor = ""; // Default button color
+		clearInputBtn.style.cursor = "pointer";
+
+		// Remove the disabled state from localStorage
+		localStorage.removeItem("buttonsDisabled");
+	    }
+	});
+
         // Store difficulty level before submitting the form
         function storeDifficulty() {
             localStorage.setItem("difficulty", document.getElementById("difficulty").value);
