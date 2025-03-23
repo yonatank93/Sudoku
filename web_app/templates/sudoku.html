@@ -122,8 +122,45 @@
 		});
 	    });
 	});
+
+        // Make sure to use `DOMContentLoaded` to run code after page loads
+        document.addEventListener("DOMContentLoaded", function () {
+            document.getElementById("checkSolution").addEventListener("click", function () {
+                const sudokuInput = [];
+                for (let i = 0; i < 9; i++) {
+                    const row = [];
+                    for (let j = 0; j < 9; j++) {
+                        const cell = document.querySelector(`input[name="cell${i}${j}"]`);
+                        row.push(cell.value ? parseInt(cell.value) : 0); // Get value from input
+                    }
+                    sudokuInput.push(row);
+                }
+
+                // Check solution via fetch
+                fetch("/check_solution", {
+                    method: "POST",
+                    body: JSON.stringify({ problem: sudokuInput }),
+                    headers: { "Content-Type": "application/json" },
+                })
+                .then(response => response.json())
+                .then(data => {
+                    const messageElement = document.getElementById("solutionMessage");
+                    if (data.solved) {
+                        messageElement.textContent = "Congratulations! The Sudoku is solved!";
+                        messageElement.style.color = "green"; // Optional: green text for solved
+                    } else {
+                        messageElement.textContent = "Oops! The Sudoku is not solved yet.";
+                        messageElement.style.color = "red"; // Optional: red text for not solved
+                    }
+                })
+                .catch(error => {
+                    console.error("Error checking solution:", error);
+                });
+            });
+        });
     </script>
 </head>
+
 <body>
     <h1>Play Sudoku!</h1>
     <p style="font-size: 20px; font-weight: bold; text-decoration: underline;">
@@ -160,6 +197,10 @@
             {% endfor %}
         </table>
         <br>
+	<p id="solutionMessage" style="font-size: 24px; font-weight: bold;"></p>
+
+	<!-- Check Solution Button -->
+	<button type="button" id="checkSolution"><strong>Check Solution</strong></button>
 
 	<!-- Clear User Input Button -->
 	<button type="button" onclick="clearUserInputs()">Clear Input</button>

@@ -41,5 +41,15 @@ def generate_sudoku():
     return jsonify({"problem": problem.tolist()})
 
 
+@app.route("/check_solution", methods=["POST"])
+def check_solution():
+    data = request.get_json()  # Get the JSON data from the client
+    problem = data.get("problem")
+    print(problem)
+    # Solve or check if the problem is solved
+    solved = Board(problem).solved  # Replace with your solving logic
+    return jsonify({"solved": solved})
+
+
 if __name__ == "__main__":
     app.run(debug=True)
