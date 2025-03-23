@@ -108,17 +108,17 @@ class Board:
         else:
             return False
 
-    def solve(self, callback: Callable = default_callback, verbose: bool = True):
+    def solve(self, callback: Callable = default_callback, verbose: bool = False):
         """Main method to solve the Sudoku problem."""
 
         start_time = time.perf_counter()
         while not self.solved:
-            self.step(callback)
+            self.step(callback, verbose)
         finish_time = time.perf_counter()
         if verbose:
             print("Solving time:", timedelta(seconds=finish_time - start_time))
 
-    def step(self, callback: Callable = default_callback, verbose: bool = True):
+    def step(self, callback: Callable = default_callback, verbose: bool = False):
         """Run one step of the algorithm."""
         # Try updating the tiles by looking up and comparing the lists of
         # possible values.
