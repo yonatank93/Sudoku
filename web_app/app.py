@@ -13,16 +13,22 @@ def index():
             row = []
             for j in range(9):
                 value = request.form.get(f"cell{i}{j}")
-                print(value)
                 row.append(int(value) if value else 0)
             sudoku_input.append(row)
 
-        # Solve the sudoku
+        # Keep track of the original puzzle before solving
+        original_puzzle = np.array(sudoku_input)
+
+        # Solve the Sudoku
         solution = solve_sudoku(sudoku_input)
 
-        return render_template("sudoku.html", solution=solution)
+        return render_template(
+            "sudoku.html", solution=solution, original_puzzle=original_puzzle
+        )
 
-    return render_template("sudoku.html", solution=np.zeros((9, 9)))
+    return render_template(
+        "sudoku.html", solution=np.zeros((9, 9)), original_puzzle=np.zeros((9, 9))
+    )
 
 
 def solve_sudoku(sudoku_problem):
@@ -45,7 +51,6 @@ def generate_sudoku():
 def check_solution():
     data = request.get_json()  # Get the JSON data from the client
     problem = data.get("problem")
-    print(problem)
     # Solve or check if the problem is solved
     solved = Board(problem).solved  # Replace with your solving logic
     return jsonify({"solved": solved})

@@ -67,7 +67,7 @@
             });
 
             // Fetch Sudoku problem when "Generate Problem" is clicked
-            document.getElementById("generateBtn").addEventListener("click", function () {
+            document.getElementById("generateProblem").addEventListener("click", function () {
                 const level = document.getElementById("difficulty").value;
                 fetch(`/generate?level=${level}`)
                     .then(response => response.json())
@@ -177,7 +177,7 @@
         <span>Hard</span> <!-- Right label -->
 
         <!-- Generate Problem Button -->
-        <button type="button" id="generateBtn">Generate Problem</button>
+        <button type="button" id="generateProblem">Generate Problem</button>
         <br><br>
 
         <table border="1">
@@ -187,7 +187,9 @@
                 <td>
                     <input type="text" name="cell{{i}}{{j}}" size="1" maxlength="1"
                            oninput="this.value = this.value.replace(/[^1-9]/g, '')"
-                           value="{{ solution[i][j] if solution[i][j] > 0 else '' }}">
+                           value="{{ solution[i][j] if solution[i][j] > 0 else '' }}"
+			   {% if solution[i][j] > 0 %} readonly {% endif %}
+		    {% if original_puzzle[i][j] > 0 %} class="prefilled" {% endif %}>
                 </td>
                 {% endfor %}
             </tr>
