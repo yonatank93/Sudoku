@@ -1,7 +1,7 @@
 import argparse
 
 from .reader import UserInput
-from .board import Board
+from .sudoku import Sudoku
 
 
 def main(argv=None):
@@ -23,7 +23,7 @@ def main(argv=None):
     args = arg_parser.parse_args(argv)
 
     board_input = UserInput()
-    board = Board(board_input.board)
+    board = Sudoku(board_input.board)
     if args.show_init:
         print()
         print("Problem:")

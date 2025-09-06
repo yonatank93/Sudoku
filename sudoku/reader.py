@@ -5,7 +5,7 @@ class UserInput:
     """Interactive method to input the sudoku board.
 
     Input numbers in each row without any space. Each row should be 9 characters long.
-    If the tile is empty, input either "_" (underscore), "-" (dash), " " (empty space), or
+    If the cell is empty, input either "_" (underscore), "-" (dash), " " (empty space), or
     "0".
 
     Example
@@ -18,7 +18,7 @@ class UserInput:
     * Each number 1-9 should only appear at most 1 time in each input row.
     """
 
-    empty_char = ["_", "-", " ", "0"]  # These characters indicate that the tile is empty
+    empty_char = ["_", "-", " ", "0"]  # These characters indicate that the cell is empty
 
     def __init__(self):
         print("Input each row of the board below:")

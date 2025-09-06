@@ -1,5 +1,5 @@
 from .main import main
-from .board import Board
+from .sudoku import Sudoku
 from .generate_problem import generate_problem
 
 
