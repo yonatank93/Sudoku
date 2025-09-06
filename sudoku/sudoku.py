@@ -195,9 +195,12 @@ class Sudoku:
     def solved(self) -> bool:
         """Check if the board is solved."""
         noccur = self._count_occurence()
-        return len(self.get_empty_cells()) == 0 and np.all(
+        if len(self.get_empty_cells()) == 0 and np.all(
             [occ == self._nallowed_values for occ in noccur]
-        )
+        ):
+            return True
+        else:
+            return False
 
     def solve(
         self,

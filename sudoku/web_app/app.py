@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, jsonify
-from sudoku import generate_problem, Board
+from sudoku import generate_problem, Sudoku
 import numpy as np
 
 app = Flask(__name__)
@@ -33,7 +33,7 @@ def index():
 
 def solve_sudoku(sudoku_problem):
     sudoku_problem = np.array(sudoku_problem)  # Ensure np.array
-    board = Board(sudoku_problem)  # Create a board object
+    board = Sudoku(sudoku_problem)  # Create a board object
     board.solve(verbose=False)  # Solve the board
     return board.board
 
@@ -52,7 +52,7 @@ def check_solution():
     data = request.get_json()  # Get the JSON data from the client
     problem = data.get("problem")
     # Solve or check if the problem is solved
-    solved = Board(problem).solved  # Replace with your solving logic
+    solved = Sudoku(problem).solved  # Replace with your solving logic
     return jsonify({"solved": solved})
 
 
