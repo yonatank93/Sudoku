@@ -2,11 +2,12 @@ import copy
 import random
 import time
 from datetime import timedelta
-from typing import Sequence, Callable, Dict
+from typing import List, Sequence, Callable, Dict
 
 import numpy as np
 
 from sudoku.cell import Cell
+from sudoku.groups import Row, Column, Block
 
 default_allowed_values = set(range(1, 10))
 
@@ -30,6 +31,11 @@ class Sudoku:
 
     Parameters
     ----------
+    board: array-like
+        An array that represent the Sudoku problem. It is represented by a
+        square array-like, where the elements of the array give show the value
+        in each corresponding cell. The value of zero means that the cell is
+        empty.
     allowed_values: set-like, optional
         A set of allowed values in the Sudoku board. The default is a set of
         integers from 1 to 9, inclusive, which is the normal Sudoku setup.
@@ -42,10 +48,10 @@ class Sudoku:
 
     Attributes
     ----------
-    board: np.ndarray (9, 9,)
+    board: np.ndarray
         An array that represent the Sudoku board. This array is mutated during
         the solving process, and can be called to access the solved board.
-    orig_board: np.adarray (9, 9,)
+    orig_board: np.ndarray
         An array that represent the initial state of the Sudoku board that
         shows the problem.
 
@@ -71,18 +77,24 @@ class Sudoku:
                 self.nblocks_rows = 3
                 self.nblocks_columns = 3
             else:
-                raise ValueError("Either nblocks_columns or nblocks_rows must be set.")
+                raise ValueError(
+                    "Either nblocks_columns or nblocks_rows must be set."
+                )
 
         if nblocks_rows is not None:
             self.nblocks_rows = nblocks_rows
             if nblocks_columns is None:
-                self.nblocks_columns = self._nallowed_values // self.nblocks_rows
+                self.nblocks_columns = (
+                    self._nallowed_values // self.nblocks_rows
+                )
             else:
                 self.nblocks_columns = nblocks_columns
         if nblocks_columns is not None:
             self.nblocks_columns = nblocks_columns
             if nblocks_rows is None:
-                self.nblocks_rows = self._nallowed_values // self.nblocks_columns
+                self.nblocks_rows = (
+                    self._nallowed_values // self.nblocks_columns
+                )
             else:
                 self.nblocks_rows = nblocks_rows
         self._nblocks = self.nblocks_rows * self.nblocks_columns
@@ -100,7 +112,7 @@ class Sudoku:
 
         # Initializations
         self._board = None
-        self.orig_board = None
+        self.orig_board = copy.copy(board)
         self._intermediate_state = {}
         self.niter = 0
 
@@ -137,7 +149,9 @@ class Sudoku:
             f"{self._nallowed_values}x{self._nallowed_values} array-like",
         )
         # Check if the values in the given board are valid
-        unique_board_values = [val for val in np.unique(board.flatten()) if val != 0]
+        unique_board_values = [
+            val for val in np.unique(board.flatten()) if val != 0
+        ]
         values_not_allowed = [
             val for val in unique_board_values if val not in self.allowed_values
         ]
@@ -147,7 +161,8 @@ class Sudoku:
         )
 
         self._board = np.asarray(board)
-        self.orig_board = copy.copy(self.board)
+        if self.orig_board is None:
+            self.orig_board = copy.copy(board)
 
     def update_board_value(self, val: float, cell: Cell):
         board = copy.copy(self.board)
@@ -155,7 +170,72 @@ class Sudoku:
         self.board = board
 
     @property
-    def cells(self) -> Cell:
+    def rows(self) -> List[Row]:
+        """A list of Row's in the board.
+
+        Returns
+        -------
+        rows: list
+            A list that contains :class:`~sudoku.groups.Row` for each row in
+            the board.
+        """
+        return [
+            Row(self.board, idx, self.allowed_values)
+            for idx in range(self._nallowed_values)
+        ]
+
+    @property
+    def columns(self) -> List[Column]:
+        """A list of Column's in the board.
+
+        Returns
+        -------
+        columns: list
+            A list that contains :class:`~sudoku.groups.Column` for each column
+            in the board.
+        """
+        return [
+            Column(self.board, idx, self.allowed_values)
+            for idx in range(self._nallowed_values)
+        ]
+
+    @property
+    def blocks(self) -> List[Block]:
+        """A list of Block's in the board.
+
+        Returns
+        -------
+        blocks: list
+            A list that contains :class:`~sudoku.groups.Block` for each block
+            in the board.
+        """
+        return [
+            Block(
+                self.board,
+                idx,
+                (
+                    self._nallowed_values // self.nblocks_rows,
+                    self._nallowed_values // self.nblocks_columns,
+                ),
+                self.allowed_values,
+            )
+            for idx in range(self._nblocks)
+        ]
+
+    @property
+    def cells(self) -> np.array:
+        """Return the cells in a 2D array.
+
+        Returns
+        -------
+        cells: np.ndarray
+            A 2D array of the same shape as the board that contains
+            :class:`~sudoku.cell.Cell` for each cell in the board.
+        """
+        return np.array(self._cells_flatten).reshape(self.board.shape)
+
+    @property
+    def _cells_flatten(self) -> List[Cell]:
         """Scan the board and create :class:`~sudoku.cell.Cell` instances.
 
         Returns
@@ -180,9 +260,13 @@ class Sudoku:
     def get_empty_cells(self, fmt="list") -> Sequence[Cell]:
         """List all the empty cells."""
         if fmt == "list":
-            return [cell for cell in self.cells if cell.is_empty]
+            return [cell for cell in self._cells_flatten if cell.is_empty]
         elif fmt == "dict":
-            return {ii: cell for ii, cell in enumerate(self.cells) if cell.is_empty}
+            return {
+                ii: cell
+                for ii, cell in enumerate(self._cells_flatten)
+                if cell.is_empty
+            }
 
     def _count_occurence(self) -> Sequence[int]:
         """Count how many time each allowed value shows up in the board."""
@@ -225,9 +309,9 @@ class Sudoku:
 
         # Try updating the cells by looking up and comparing the lists of
         # possible values.
-        old_cells = copy.copy(self.cells)  # Cells before the update
+        old_cells = copy.copy(self._cells_flatten)  # Cells before the update
         self._update_cells()
-        new_cells = copy.copy(self.cells)  # Cells after the update
+        new_cells = copy.copy(self._cells_flatten)  # Cells after the update
         if verbose:
             print(
                 f"Iteration {self.niter}: "
@@ -239,7 +323,9 @@ class Sudoku:
         # value.
         if self._cells_same(old_cells, new_cells):
             empty_cells_dict = self.get_empty_cells(fmt="dict")
-            nposs_vals = [len(cell.possible_values) for cell in empty_cells_dict.values()]
+            nposs_vals = [
+                len(cell.possible_values) for cell in empty_cells_dict.values()
+            ]
 
             # Check if the attempt failed - This can be done if any empty cell
             # has no possible value.
@@ -256,7 +342,9 @@ class Sudoku:
             else:
                 idx_sort = np.argsort(nposs_vals)
                 key_sorted = np.array(list(empty_cells_dict))[idx_sort]
-                empty_cells_dict = {ii: empty_cells_dict[ii] for ii in key_sorted}
+                empty_cells_dict = {
+                    ii: empty_cells_dict[ii] for ii in key_sorted
+                }
                 self._update_intermediate_state(empty_cells_dict)
 
                 # Retrieve data from the last intermediate state
@@ -305,27 +393,33 @@ class Sudoku:
         # possible values
         for block in range(self._nblocks):
             cells_block = [
-                cell for cell in self.cells if cell.block_idx == block and cell.is_empty
+                cell
+                for cell in self._cells_flatten
+                if cell.block_idx == block and cell.is_empty
             ]
             self._update_cells_from_single_possible_occurence(cells_block)
         for row in range(self._nallowed_values):
             cells_row = [
-                cell for cell in self.cells if cell.row_idx == row and cell.is_empty
+                cell
+                for cell in self._cells_flatten
+                if cell.row_idx == row and cell.is_empty
             ]
             self._update_cells_from_single_possible_occurence(cells_row)
         for column in range(self._nallowed_values):
             cells_column = [
-                cell for cell in self.cells if cell.column_idx == column and cell.is_empty
+                cell
+                for cell in self._cells_flatten
+                if cell.column_idx == column and cell.is_empty
             ]
             self._update_cells_from_single_possible_occurence(cells_column)
 
     def _update_cells_from_single_possible_value(self):
         """Update the cells that have only one possible value."""
-        ncells = len(self.cells)
+        ncells = len(self._cells_flatten)
         while True:
             n = 0
             for ii in range(ncells):
-                cell = self.cells[ii]
+                cell = self._cells_flatten[ii]
                 if cell.is_empty:
                     if len(cell.possible_values) == 1:
                         # There is only 1 possible value that can go into this
@@ -335,7 +429,9 @@ class Sudoku:
             if n == 0:
                 break
 
-    def _update_cells_from_single_possible_occurence(self, cells_group: Sequence[Cell]):
+    def _update_cells_from_single_possible_occurence(
+        self, cells_group: Sequence[Cell]
+    ):
         """Look at a single group (block, row, or column) and see if we can
         solve any in that group by looking if there is a value in the list of
         possible values of an empty cell that is not in the list of possible
@@ -361,13 +457,19 @@ class Sudoku:
         )
 
         for ii, cell in test_cells.items():
-            self._intermediate_state[self.niter]["test_cells"].setdefault(ii, [])
+            self._intermediate_state[self.niter]["test_cells"].setdefault(
+                ii, []
+            )
 
             test_values = cell.possible_values.copy()
-            tried_values = self._intermediate_state[self.niter]["test_cells"][ii]
+            tried_values = self._intermediate_state[self.niter]["test_cells"][
+                ii
+            ]
             for val in test_values:
                 if val not in tried_values:
-                    self._intermediate_state[self.niter]["test_cells"][ii].append(val)
+                    self._intermediate_state[self.niter]["test_cells"][
+                        ii
+                    ].append(val)
                     break
 
     def _revert_state(self, pop=False):
@@ -392,7 +494,9 @@ class Sudoku:
         cells_dict = {}
         for cell in cells:
             if cell.is_empty:
-                cells_dict.update({(cell.row_idx, cell.column_idx): cell.possible_values})
+                cells_dict.update(
+                    {(cell.row_idx, cell.column_idx): cell.possible_values}
+                )
         return cells_dict
 
     # def display(self):

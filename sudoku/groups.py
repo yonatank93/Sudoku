@@ -43,9 +43,7 @@ class GroupABC(ABC):
 
 
 class Row(GroupABC):
-    def __init__(
-        self, board: np.ndarray, idx: int, allowed_values: Sequence[int]
-    ):
+    def __init__(self, board: np.ndarray, idx: int, allowed_values: Sequence[int]):
         super().__init__(board, idx, allowed_values)
 
     @property
@@ -54,9 +52,7 @@ class Row(GroupABC):
 
 
 class Column(GroupABC):
-    def __init__(
-        self, board: np.ndarray, idx: int, allowed_values: Sequence[int]
-    ):
+    def __init__(self, board: np.ndarray, idx: int, allowed_values: Sequence[int]):
         super().__init__(board, idx, allowed_values)
 
     @property
@@ -77,6 +73,10 @@ class Block(GroupABC):
 
     @property
     def values(self) -> np.ndarray:
+        return self.values_2d.flatten()
+
+    @property
+    def values_2d(self) -> np.ndarray:
         board_shape = self.board.shape
         nblock_rows = board_shape[0] // self.dim[0]
         nblock_columns = board_shape[1] // self.dim[1]
@@ -87,4 +87,4 @@ class Block(GroupABC):
             row_start : row_start + self.dim[0],
             col_start : col_start + self.dim[1],
         ]
-        return values.flatten()
+        return values
