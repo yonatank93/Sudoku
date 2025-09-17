@@ -161,8 +161,21 @@ class Sudoku:
         )
 
         self._board = np.asarray(board)
+        self.validate_board()
         if self.orig_board is None:
             self.orig_board = copy.copy(board)
+
+    def validate_board(self):
+        """Validate the board by checking if there is any repeated, non-zero
+        values within the groups (rows, columns, and blocks)
+        """
+        groups_collection = [self.rows, self.columns, self.blocks]
+        for groups in groups_collection:
+            for ii, group in enumerate(groups):
+                nonzero_vals = [val for val in group.values if val != 0]
+                assert len(nonzero_vals) == len(
+                    set(nonzero_vals)
+                ), f"Board is invalid; there is a repetition in {group}"
 
     def update_board_value(self, val: float, cell: Cell):
         board = copy.copy(self.board)
