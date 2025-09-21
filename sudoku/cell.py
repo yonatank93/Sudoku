@@ -64,8 +64,8 @@ class Cell:
     @property
     def possible_values(self) -> Sequence[int]:
         """Get a list of possible values we can put in the cell.
-        It returns an empty list if the cell is not empty, showing that we cannot
-        put any other value in that cell.
+        It returns an empty list if the cell is not empty, showing that we
+        cannot put any other value in that cell.
         """
         if not self:
             return []

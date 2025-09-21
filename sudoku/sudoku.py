@@ -115,6 +115,7 @@ class Sudoku:
         self.orig_board = copy.copy(board)
         self._intermediate_state = {}
         self.niter = 0
+        self._nstep_call = 0
 
         # Set the board
         if board is not None:
@@ -270,7 +271,7 @@ class Sudoku:
         ]
         return cells
 
-    def get_empty_cells(self, fmt="list") -> Sequence[Cell]:
+    def _get_empty_cells(self, fmt="list") -> Sequence[Cell]:
         """List all the empty cells."""
         if fmt == "list":
             return [cell for cell in self._cells_flatten if cell.is_empty]
@@ -292,7 +293,7 @@ class Sudoku:
     def solved(self) -> bool:
         """Check if the board is solved."""
         noccur = self._count_occurence()
-        if len(self.get_empty_cells()) == 0 and np.all(
+        if len(self._get_empty_cells()) == 0 and np.all(
             [occ == self._nallowed_values for occ in noccur]
         ):
             return True
@@ -318,7 +319,11 @@ class Sudoku:
             return self.board
 
     def step(self, verbose: bool = False):
-        """Run one step of the algorithm."""
+        """Run one step of the algorithm.
+
+        Each step can only be one attempt to update the board from a single
+        occuring value or testing to set a cell to a value, but not both
+        """
 
         # Try updating the cells by looking up and comparing the lists of
         # possible values.
@@ -328,14 +333,14 @@ class Sudoku:
         if verbose:
             print(
                 f"Iteration {self.niter}: "
-                f"{len(self.get_empty_cells())} empty cells left."
+                f"{len(self._get_empty_cells())} empty cells left."
             )
 
         # Compare the cells before and after the update. If the above algorithm
         # fails to update the cells, then try setting one of the cell to a
         # value.
         if self._cells_same(old_cells, new_cells):
-            empty_cells_dict = self.get_empty_cells(fmt="dict")
+            empty_cells_dict = self._get_empty_cells(fmt="dict")
             nposs_vals = [
                 len(cell.possible_values) for cell in empty_cells_dict.values()
             ]
@@ -356,7 +361,7 @@ class Sudoku:
                 idx_sort = np.argsort(nposs_vals)
                 key_sorted = np.array(list(empty_cells_dict))[idx_sort]
                 empty_cells_dict = {
-                    ii: empty_cells_dict[ii] for ii in key_sorted
+                    int(ii): empty_cells_dict[ii] for ii in key_sorted
                 }
                 self._update_intermediate_state(empty_cells_dict)
 
@@ -364,9 +369,11 @@ class Sudoku:
                 last_state = self._intermediate_state[self.niter]
                 for ii, val in last_state["test_cells"].items():
                     cell = empty_cells_dict[ii]
-                    new_vals = set(cell.possible_values) - set(val)
+                    new_vals = sorted(
+                        list(set(cell.possible_values) - set(val[:-1]))
+                    )
                     if new_vals:
-                        value = next(iter(new_vals))
+                        value = new_vals[0]
                         self.update_board_value(value, cell)
                         if verbose:
                             print(
@@ -396,6 +403,7 @@ class Sudoku:
                         self.niter -= 1
 
         self.niter += 1
+        self._nstep_call += 1
 
     def _update_cells(self):
         """Update the cells values."""
@@ -469,6 +477,7 @@ class Sudoku:
             self.niter, {"board": self.board.copy(), "test_cells": {}}
         )
 
+        break_outer_loop = False
         for ii, cell in test_cells.items():
             self._intermediate_state[self.niter]["test_cells"].setdefault(
                 ii, []
@@ -483,7 +492,11 @@ class Sudoku:
                     self._intermediate_state[self.niter]["test_cells"][
                         ii
                     ].append(val)
+                    break_outer_loop = True
                     break
+
+            if break_outer_loop:
+                break
 
     def _revert_state(self, pop=False):
         """Revert to the previous state."""
@@ -546,3 +559,4 @@ class Sudoku:
         self.board = self.orig_board
         self._intermediate_state = {}
         self.niter = 0
+        self._nstep_call = 0
