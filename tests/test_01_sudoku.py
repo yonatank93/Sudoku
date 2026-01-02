@@ -15,9 +15,10 @@ def callback(board_inst):
     print("Iteration:", board_inst.niter, "Number of empty cells:", nempty_cell)
 
 
-def solve_example_problems(path, exclude_board=[], init_args={}):
+def solve_example_problems(path, exclude_board=[]):
     board_files = sorted(glob.glob(str(Path(path) / "board_*.json")))
 
+    # Exclude some boards if needed
     test_board_files = copy.copy(board_files)
     for exclude in exclude_board:
         test_board_files = [f for f in test_board_files if exclude not in f]
@@ -31,6 +32,10 @@ def solve_example_problems(path, exclude_board=[], init_args={}):
         solution = data["solution"]
 
         # Instantiate the board
+        init_args = {
+            "allowed_values": data["allowed_values"],
+            "block_dim": data["block_dim"],
+        }
         S = Sudoku(board, **init_args)
         # Solve the problem
         S.solve(callback)
@@ -41,24 +46,18 @@ def solve_example_problems(path, exclude_board=[], init_args={}):
 
 
 def test_solve_6by6():
-    solve_example_problems(
-        "../data/6by6",
-        init_args={"allowed_values": list(range(1, 7)), "nblocks_columns": 2},
-    )
+    print("Testing 6x6 boards")
+    solve_example_problems("../data/6by6")
 
 
 def test_solve_9by9():
-    solve_example_problems(
-        "../data/9by9",
-        init_args={"allowed_values": list(range(1, 10)), "nblocks_columns": 3},
-    )
+    print("Testing 9x9 boards")
+    solve_example_problems("../data/9by9")
 
 
 def test_solve_16by16():
-    solve_example_problems(
-        "../data/16by16",
-        init_args={"allowed_values": list(range(1, 17)), "nblocks_columns": 4},
-    )
+    print("Testing 16x16 boards")
+    solve_example_problems("../data/16by16")
 
 
 if __name__ == "__main__":
