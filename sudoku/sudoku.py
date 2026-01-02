@@ -1,15 +1,15 @@
+import pickle
 import copy
-import random
 import time
 from datetime import timedelta
-from typing import List, Sequence, Callable, Dict
+from typing import List, Sequence, Callable, Dict, Union
 
 import numpy as np
 
-from sudoku.cell import Cell
+from sudoku.cell import Cell, empty_cell_repr
 from sudoku.groups import Row, Column, Block
 
-default_allowed_values = set(range(1, 10))
+default_allowed_values = range(1, 10)
 
 
 def default_callback(board):
@@ -32,26 +32,24 @@ class Sudoku:
     Parameters
     ----------
     board: array-like
-        An array that represent the Sudoku problem. It is represented by a
+        An array-like that represent the Sudoku problem. It is represented by a
         square array-like, where the elements of the array give show the value
         in each corresponding cell. The value of zero means that the cell is
         empty.
     allowed_values: set-like, optional
         A set of allowed values in the Sudoku board. The default is a set of
         integers from 1 to 9, inclusive, which is the normal Sudoku setup.
-    nblocks_columns: int, optional
-        Number of blocks in each column. The default is 3, which is the normal
-        Sudoku setup.
-    nblocks_rows: int, optional
-        Number of blocks in each row. The default is 3, which is the normal
-        Sudoku setup.
+    block_dim: tuple, optional
+        A tuple that represent the dimension (height, width) of each block. The
+        default is (3, 3), which is the normal Sudoku setup.
 
     Attributes
     ----------
-    board: np.ndarray
-        An array that represent the Sudoku board. This array is mutated during
-        the solving process, and can be called to access the solved board.
-    orig_board: np.ndarray
+    board: array-like
+        An array-like that represent the Sudoku board. This array is mutated
+        during the solving process, and can be called to access the solved
+        board.
+    orig_board: array-like
         An array that represent the initial state of the Sudoku board that
         shows the problem.
 
@@ -65,84 +63,68 @@ class Sudoku:
         self,
         board=None,
         allowed_values=default_allowed_values,
-        nblocks_rows=None,
-        nblocks_columns=None,
+        block_dim=(3, 3),
+        # nblocks_rows=None,
+        # nblocks_columns=None,
     ):
-        self.allowed_values = set(allowed_values)
-        self._nallowed_values = len(self.allowed_values)
-
-        if (nblocks_columns is None) and (nblocks_rows is None):
-            if len(self.allowed_values) == len(default_allowed_values):
-                # Default to the normal Sudoku setup
-                self.nblocks_rows = 3
-                self.nblocks_columns = 3
-            else:
-                raise ValueError(
-                    "Either nblocks_columns or nblocks_rows must be set."
-                )
-
-        if nblocks_rows is not None:
-            self.nblocks_rows = nblocks_rows
-            if nblocks_columns is None:
-                self.nblocks_columns = (
-                    self._nallowed_values // self.nblocks_rows
-                )
-            else:
-                self.nblocks_columns = nblocks_columns
-        if nblocks_columns is not None:
-            self.nblocks_columns = nblocks_columns
-            if nblocks_rows is None:
-                self.nblocks_rows = (
-                    self._nallowed_values // self.nblocks_columns
-                )
-            else:
-                self.nblocks_rows = nblocks_rows
-        self._nblocks = self.nblocks_rows * self.nblocks_columns
-
-        # Some checks
-        assert self._nallowed_values % self.nblocks_columns == 0, (
-            f"Number of values ({self._nallowed_values}) is not divisible by "
-            f"nblocks_columns={self.nblocks_columns}"
+        self.allowed_values = (
+            [val for val in allowed_values]
+            if isinstance(allowed_values, str)
+            else allowed_values
         )
+        self._nallowed_values = len(self.allowed_values)
+        assert self._nallowed_values > 0, "The allowed values cannot be empty."
+        assert len(self.allowed_values) == len(
+            set(self.allowed_values)
+        ), "The allowed values should not contain duplicates."
 
-        assert self._nallowed_values % self.nblocks_rows == 0, (
-            f"Number of values ({self._nallowed_values}) is not divisible by "
-            f"nblocks_rows={self.nblocks_rows}"
+        # Check block dimensions
+        self.block_dim = block_dim
+        self._nblocks = self.block_dim[0] * self.block_dim[1]
+        assert self._nblocks == self._nallowed_values, (
+            "The dimension of block is incorrect. "
+            "The product of the dimensions must equal to the number of allowed values."
         )
 
         # Initializations
         self._board = None
-        self.orig_board = copy.copy(board)
+        self.orig_board = copy.deepcopy(board)
         self._intermediate_state = {}
         self.niter = 0
         self._nstep_call = 0
 
         # Set the board
         if board is not None:
-            self.board = board
+            self.board = copy.deepcopy(board)
 
     @property
-    def board(self) -> np.ndarray:
+    def board(self) -> Union[list, np.ndarray]:
         """Return the Sudoku board."""
         return self._board
 
     @board.setter
-    def board(self, board: np.ndarray) -> None:
+    def board(self, board: Union[list, np.ndarray]) -> None:
         """Set the Sudoku board.
 
         Parameters
         ----------
         board: array-like
-            An array that represent the Sudoku problem. It is represented by a
-            square array-like with the dimension equals to the length of
+            An array-like that represent the Sudoku problem. It is represented
+            by a square array-like with the dimension equals to the length of
             allowed values.
             The elements of the array give the value in each cell, and value of
             zero means that the cell is empty.
         """
-        board = np.array(board)
-
+        # Convert the format as necessary
+        _board = []
+        for rows in board:
+            if isinstance(rows, str):
+                _board.append([val for val in rows])
+            else:
+                _board.append(rows)
+        board = copy.deepcopy(_board)
         # Check if the board has the correct shape
-        assert board.shape == (
+        assert np.array(board).shape == (
             self._nallowed_values,
             self._nallowed_values,
         ), (
@@ -150,9 +132,11 @@ class Sudoku:
             f"{self._nallowed_values}x{self._nallowed_values} array-like",
         )
         # Check if the values in the given board are valid
-        unique_board_values = [
-            val for val in np.unique(board.flatten()) if val != 0
-        ]
+        unique_board_values = list(
+            set(
+                [el for row in board for el in row if el not in empty_cell_repr]
+            )
+        )
         values_not_allowed = [
             val for val in unique_board_values if val not in self.allowed_values
         ]
@@ -161,10 +145,10 @@ class Sudoku:
             f"in the allowed values ({self.allowed_values})."
         )
 
-        self._board = np.asarray(board)
+        self._board = copy.deepcopy(board)
         self.validate_board()
         if self.orig_board is None:
-            self.orig_board = copy.copy(board)
+            self.orig_board = copy.deepcopy(board)
 
     def validate_board(self):
         """Validate the board by checking if there is any repeated, non-zero
@@ -173,14 +157,16 @@ class Sudoku:
         groups_collection = [self.rows, self.columns, self.blocks]
         for groups in groups_collection:
             for ii, group in enumerate(groups):
-                nonzero_vals = [val for val in group.values if val != 0]
+                nonzero_vals = [
+                    val for val in group.values if val not in empty_cell_repr
+                ]
                 assert len(nonzero_vals) == len(
                     set(nonzero_vals)
                 ), f"Board is invalid; there is a repetition in {group}"
 
     def update_board_value(self, val: float, cell: Cell):
-        board = copy.copy(self.board)
-        board[cell.row_idx, cell.column_idx] = val
+        board = copy.deepcopy(self.board)
+        board[cell.row_idx][cell.column_idx] = val
         self.board = board
 
     @property
@@ -227,10 +213,7 @@ class Sudoku:
             Block(
                 self.board,
                 idx,
-                (
-                    self._nallowed_values // self.nblocks_rows,
-                    self._nallowed_values // self.nblocks_columns,
-                ),
+                self.block_dim,
                 self.allowed_values,
             )
             for idx in range(self._nblocks)
@@ -246,7 +229,7 @@ class Sudoku:
             A 2D array of the same shape as the board that contains
             :class:`~sudoku.cell.Cell` for each cell in the board.
         """
-        return np.array(self._cells_flatten).reshape(self.board.shape)
+        return np.array(self._cells_flatten).reshape(np.array(self.board).shape)
 
     @property
     def _cells_flatten(self) -> List[Cell]:
@@ -259,13 +242,7 @@ class Sudoku:
             the board.
         """
         cells = [
-            Cell(
-                self.board,
-                [row, col],
-                self.allowed_values,
-                self.nblocks_rows,
-                self.nblocks_columns,
-            )
+            Cell(self.board, [row, col], self.allowed_values, self.block_dim)
             for row in range(self._nallowed_values)
             for col in range(self._nallowed_values)
         ]
@@ -286,7 +263,7 @@ class Sudoku:
         """Count how many time each allowed value shows up in the board."""
         occur = []
         for val in self.allowed_values:
-            occur.append(np.sum(self.board == val))
+            occur.append(sum(cell == val for row in self.board for cell in row))
         return occur
 
     @property
@@ -327,9 +304,11 @@ class Sudoku:
 
         # Try updating the cells by looking up and comparing the lists of
         # possible values.
-        old_cells = copy.copy(self._cells_flatten)  # Cells before the update
+        old_cells = copy.deepcopy(
+            self._cells_flatten
+        )  # Cells before the update
         self._update_cells()
-        new_cells = copy.copy(self._cells_flatten)  # Cells after the update
+        new_cells = copy.deepcopy(self._cells_flatten)  # Cells after the update
         if verbose:
             print(
                 f"Iteration {self.niter}: "
@@ -359,15 +338,37 @@ class Sudoku:
 
             else:
                 idx_sort = np.argsort(nposs_vals)
-                key_sorted = np.array(list(empty_cells_dict))[idx_sort]
+                key_sorted = [list(empty_cells_dict)[ii] for ii in idx_sort]
                 empty_cells_dict = {
-                    int(ii): empty_cells_dict[ii] for ii in key_sorted
+                    ii: empty_cells_dict[ii] for ii in key_sorted
                 }
                 self._update_intermediate_state(empty_cells_dict)
 
                 # Retrieve data from the last intermediate state
                 last_state = self._intermediate_state[self.niter]
-                for ii, val in last_state["test_cells"].items():
+                ii = list(last_state["test_cells"])[-1]
+                if ii == "EOL":
+                    # We have exhausted all possible cells and values. Need
+                    # to go back 2 steps above. We can't just go back one
+                    # step, because we have already tried all possible
+                    # values.
+                    # Go back one step and delete the cached state.
+                    self._revert_state(pop=True)
+                    # Go back to the second previous state and start the
+                    # test from this state
+                    self._revert_state()
+
+                    if verbose:
+                        print(
+                            "No more values to try, "
+                            f"reverting to iteration {self.niter}"
+                        )
+                    # Counter the iteration increment below
+                    self.niter -= 1
+
+                else:
+                    val = last_state["test_cells"][ii]
+                    # for ii, val in last_state["test_cells"].items():
                     cell = empty_cells_dict[ii]
                     new_vals = sorted(
                         list(set(cell.possible_values) - set(val[:-1]))
@@ -381,26 +382,26 @@ class Sudoku:
                                 f"{cell.column_idx}] to {value} "
                                 f"(possible values: {cell.possible_values})"
                             )
-                        break
+                #     break
 
-                    if ii == key_sorted[-1]:
-                        # We have exhausted all possible cells and values. Need
-                        # to go back 2 steps above. We can't just go back one
-                        # step, because we have already tried all possible
-                        # values.
-                        # Go back one step and delete the cached state.
-                        self._revert_state(pop=True)
-                        # Go back to the second previous state and start the
-                        # test from this state
-                        self._revert_state()
+                # if ii == key_sorted[-1]:
+                #     # We have exhausted all possible cells and values. Need
+                #     # to go back 2 steps above. We can't just go back one
+                #     # step, because we have already tried all possible
+                #     # values.
+                #     # Go back one step and delete the cached state.
+                #     self._revert_state(pop=True)
+                #     # Go back to the second previous state and start the
+                #     # test from this state
+                #     self._revert_state()
 
-                        if verbose:
-                            print(
-                                "No more values to try, "
-                                f"reverting to iteration {self.niter}"
-                            )
-                        # Counter the iteration increment below
-                        self.niter -= 1
+                #     if verbose:
+                #         print(
+                #             "No more values to try, "
+                #             f"reverting to iteration {self.niter}"
+                #         )
+                #     # Counter the iteration increment below
+                #     self.niter -= 1
 
         self.niter += 1
         self._nstep_call += 1
@@ -478,6 +479,7 @@ class Sudoku:
         )
 
         break_outer_loop = False
+        state_updated = False
         for ii, cell in test_cells.items():
             self._intermediate_state[self.niter]["test_cells"].setdefault(
                 ii, []
@@ -493,10 +495,16 @@ class Sudoku:
                         ii
                     ].append(val)
                     break_outer_loop = True
+                    state_updated = True
                     break
 
             if break_outer_loop:
                 break
+
+        if not state_updated:
+            self._intermediate_state[self.niter]["test_cells"].update(
+                {"EOL": None}
+            )
 
     def _revert_state(self, pop=False):
         """Revert to the previous state."""
@@ -524,6 +532,37 @@ class Sudoku:
                     {(cell.row_idx, cell.column_idx): cell.possible_values}
                 )
         return cells_dict
+
+    def save_state(self, filename: str):
+        """Save the current state of the Sudoku to a pickle file."""
+        with open(filename, "wb") as f:
+            pickle.dump(
+                {
+                    "board": self.board,
+                    "orig_board": self.orig_board,
+                    "allowed_values": self.allowed_values,
+                    "block_dim": self.block_dim,
+                    "intermediate_state": self._intermediate_state,
+                    "niter": self.niter,
+                    "nstep_call": self._nstep_call,
+                },
+                f,
+            )
+
+    def load_state(self, filename: str):
+        """Load the state of the Sudoku from a pickle file."""
+        with open(filename, "rb") as f:
+            state = pickle.load(f)
+
+        self.board = state["board"]
+        self.orig_board = state["orig_board"]
+        self.allowed_values = state["allowed_values"]
+        self._nallowed_values = len(self.allowed_values)
+        self.block_dim = state["block_dim"]
+        self._nblocks = self.block_dim[0] * self.block_dim[1]
+        self._intermediate_state = state["intermediate_state"]
+        self.niter = state["niter"]
+        self._nstep_call = state["nstep_call"]
 
     # def display(self):
     #     """Display the Sudoku board."""

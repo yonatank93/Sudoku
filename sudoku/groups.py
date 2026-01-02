@@ -64,7 +64,7 @@ class Column(GroupABC):
 
     @property
     def values(self) -> np.ndarray:
-        return self.board[:, self.idx]
+        return [row[self.idx] for row in self.board]
 
     def __repr__(self):
         return f"Column {self.idx}"
@@ -83,20 +83,25 @@ class Block(GroupABC):
 
     @property
     def values(self) -> np.ndarray:
-        return self.values_2d.flatten()
+        values = [item for row in self.values_2d for item in row]
+        return values
 
     @property
     def values_2d(self) -> np.ndarray:
-        board_shape = self.board.shape
+        board_shape = np.array(self.board).shape
         nblock_rows = board_shape[0] // self.dim[0]
         nblock_columns = board_shape[1] // self.dim[1]
 
         row_start = (self.idx // nblock_columns) * self.dim[0]
         col_start = (self.idx % nblock_columns) * self.dim[1]
-        values = self.board[
-            row_start : row_start + self.dim[0],
-            col_start : col_start + self.dim[1],
-        ]
+        values = []
+        for ii in range(row_start, row_start + self.dim[0]):
+            values.append(
+                [
+                    self.board[ii][jj]
+                    for jj in range(col_start, col_start + self.dim[1])
+                ]
+            )
         return values
 
     def __repr__(self):

@@ -1,28 +1,26 @@
-from typing import Sequence, Tuple
+from typing import Sequence, Union
 import numpy as np
 
 from .groups import Row, Column, Block
+
+empty_cell_repr = [0, "0", None, "", " ", "_"]
 
 
 class Cell:
     def __init__(
         self,
-        board: np.ndarray,
+        board: Union[list, np.array],
         loc: Sequence[int],
         allowed_values: Sequence[int],
-        nblocks_rows: int,
-        nblocks_columns: int,
+        block_dim: Sequence[int],
     ):
         self._board = board
         self.row_idx, self.column_idx = loc
         self.allowed_values = allowed_values
 
-        self.nblocks_columns = nblocks_columns
-        self.nblocks_rows = nblocks_rows
-        self._block_dim = [
-            self.board.shape[0] // self.nblocks_rows,
-            self.board.shape[1] // self.nblocks_columns,
-        ]
+        self._block_dim = block_dim
+        self.nblocks_rows = len(board) // block_dim[0]
+        self.nblocks_columns = len(board[0]) // block_dim[1]
         self.block_idx = self.column_idx // self._block_dim[1] + (
             self.row_idx // self._block_dim[0] * self.nblocks_columns
         )
@@ -54,12 +52,12 @@ class Cell:
     @property
     def value(self) -> int:
         """Get the value of the cell."""
-        return self._board[self.row_idx, self.column_idx]
+        return self._board[self.row_idx][self.column_idx]
 
     @property
     def is_empty(self) -> bool:
         """Check if the cell is empty, i.e., has no value."""
-        return self.value == 0
+        return self.value in [0, "0", None, ""]
 
     @property
     def possible_values(self) -> Sequence[int]:
@@ -72,10 +70,11 @@ class Cell:
         block_missing_values = set(self.block.missing_values)
         row_missing_values = set(self.row.missing_values)
         column_missing_values = set(self.column.missing_values)
-        return sorted(
-            list(
-                block_missing_values
-                & row_missing_values
-                & column_missing_values
-            )
+        combined_missing_values = list(
+            block_missing_values & row_missing_values & column_missing_values
         )
+        # Sorted
+        sorted_missing_values = [
+            v for v in self.allowed_values if v in combined_missing_values
+        ]
+        return sorted_missing_values
