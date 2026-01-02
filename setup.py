@@ -35,7 +35,8 @@ setuptools.setup(
     python_requires=">=3.6",
     entry_points={
         "console_scripts": [
-            "sudoku-solve=sudoku.main:main",
+            "sudoku-solve=sudoku.cli:solve",
+            "sudoku-generate=sudoku.cli:generate_problem",
             "sudoku-play=sudoku.web_app.app:main",
         ]
     },

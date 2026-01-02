@@ -284,13 +284,16 @@ def generate_problem(
         allowed_values = list(allowed_values)
 
     # Generate a full solution first
-    print("Generating full solution...")
+    if verbose:
+        print("Generating full solution...")
     solution = generate_full_solution(allowed_values, block_dim)
     # Randomly remove elements according to the requested level
-    print("Creating problem by removing elements...")
+    if verbose:
+        print("Creating problem by removing elements...")
     nremove = _get_ncells_to_remove(level, len(allowed_values))
     board_problem = _remove_elements(solution, nremove)
-    print("Problem generated.")
+    if verbose:
+        print("Problem generated.")
 
     if return_solution:
         return board_problem, solution
