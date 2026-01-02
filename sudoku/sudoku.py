@@ -64,8 +64,6 @@ class Sudoku:
         board=None,
         allowed_values=default_allowed_values,
         block_dim=(3, 3),
-        # nblocks_rows=None,
-        # nblocks_columns=None,
     ):
         self.allowed_values = (
             [val for val in allowed_values]
@@ -564,34 +562,71 @@ class Sudoku:
         self.niter = state["niter"]
         self._nstep_call = state["nstep_call"]
 
-    # def display(self):
-    #     """Display the Sudoku board."""
-    #     print("#" * 37)
-    #     for ii in range(self.nblocks_rows):
-    #         rows = self.board[(ii * 3) : ((ii + 1) * 3)]
-    #         for jj, row in enumerate(rows):
-    #             self._print_one_row(row)
-    #             if jj < 2:
-    #                 print("#" + ("-" * 11 + "#") * 3)
-    #         print("#" * 37)
-
-    # @staticmethod
-    # def _print_one_row(row_array):
-    #     """Print one row of the board."""
-    #     b = [str(el) if el != 0 else " " for el in row_array]
-    #     print(
-    #         "#"
-    #         + f" {b[0]} | {b[1]} | {b[2]} "
-    #         + "#"
-    #         + f" {b[3]} | {b[4]} | {b[5]} "
-    #         + "#"
-    #         + f" {b[6]} | {b[7]} | {b[8]} "
-    #         + "#"
-    #     )
-
     def display(self):
-        """Temporary display method until the old style is back."""
-        print(self.board)
+        """Display the Sudoku board."""
+        # Let's find the maximum number of characters in the allowed values.
+        # Sometimes the allowed values may consists of more than 1 character.
+        # So, we need to account for this to display the board nicely.
+        max_char_len = max([len(str(val)) for val in self.allowed_values])
+        # Find how many column separators we need. Column separators include
+        # " | " or " # " at the block boundaries.
+        ncol_separators = (self._nallowed_values - 1) * 3
+        # Now, this is how many characters we need to print in each row. Note
+        # that we also need the board borders.
+        nchar_per_row = (
+            self._nallowed_values * (max_char_len)
+            + ncol_separators
+            + 4  # for borders "# " and " #"
+        )
+
+        # Print the top border
+        print("#" * nchar_per_row)
+        # Print rows
+        board = self.board.copy()
+        for ii, row in enumerate(board):
+            # First, add " " padding to each value in the row if needed
+            row_val = []
+            for val in row:
+                # For the empty cell, we just print empty spaces
+                if val == 0:
+                    val = " "
+                if len(str(val)) < max_char_len:
+                    row_val.append(
+                        " " * (max_char_len - len(str(val))) + str(val)
+                    )
+                else:
+                    row_val.append(str(val))
+            # Add the border and column separators. It is still in a list
+            # because next we need to replace some of the separators with "#"
+            # for block separation.
+            row_str_list = list("# " + " | ".join(row_val) + " #")
+            # Replace some colulmn separators with "#"
+            separator_idx = [
+                idx for idx, ch in enumerate(row_str_list) if ch == "|"
+            ]  # This is where we need to replace "|" with "#"
+            for jj, idx in enumerate(separator_idx):
+                if (jj + 1) % self.block_dim[1] == 0:
+                    row_str_list[idx] = "#"
+            # Finally, we can print the row
+            row_str = "".join(row_str_list)
+            print(row_str)
+
+            # Now, we also need to take care of the row separators
+            emDash = "\u2014"
+            if (ii + 1) % self.block_dim[0] != 0:
+                # This is for normal row separator
+                row_separator = list("#" + emDash * (nchar_per_row - 2) + "#")
+                # But we need to replace separator with either "+" at the column
+                # boundaries or "#" at the block column boundaries.
+                for jj, idx in enumerate(separator_idx):
+                    if (jj + 1) % self.block_dim[1] == 0:
+                        row_separator[idx] = "#"
+                    else:
+                        row_separator[idx] = "+"
+                print("".join(row_separator))
+            else:
+                # And this is for the block row separator
+                print("#" * nchar_per_row)
 
     def reset(self):
         """Reset the Sudoku problem."""
