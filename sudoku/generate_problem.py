@@ -76,7 +76,9 @@ def find_empty(board: list) -> tuple:
     return None
 
 
-def fill_board(board: list, allowed_values: list, block_dim: tuple) -> bool:
+def fill_board(
+    board: list, allowed_values: list, block_dim: tuple, seed: int = None
+) -> bool:
     """Main backtracking function to fill the Sudoku board.
 
     Parameters
@@ -88,6 +90,8 @@ def fill_board(board: list, allowed_values: list, block_dim: tuple) -> bool:
     block_dim: tuple
         A tuple indicating the block dimensions, i.e., number of rows and
         columns in each block.
+    seed: int, optional
+        Random seed for shuffling allowed values.
 
     Returns
     -------
@@ -104,19 +108,23 @@ def fill_board(board: list, allowed_values: list, block_dim: tuple) -> bool:
 
     r, c = cell
     nums = allowed_values
+    if seed is not None:
+        random.seed(seed)
     random.shuffle(nums)
 
     for num in nums:
         if is_valid(board, r, c, num, block_dim):
             board[r][c] = num
-            if fill_board(board, allowed_values, block_dim):
+            if fill_board(board, allowed_values, block_dim, seed):
                 return True
             board[r][c] = 0
 
     return False
 
 
-def generate_full_solution(allowed_values: list, block_dim: tuple) -> list:
+def generate_full_solution(
+    allowed_values: list, block_dim: tuple, seed: int = None
+) -> list:
     """Generate a fully solved Sudoku board using backtracking.
 
     Parameters
@@ -128,6 +136,8 @@ def generate_full_solution(allowed_values: list, block_dim: tuple) -> list:
         A tuple indicating the block dimensions, i.e., number of rows and
         columns in each block. The default is (3, 3), which is the normal
         Sudoku setup.
+    seed: int, optional
+        Random seed for generating the board.
 
     Returns
     -------
@@ -139,11 +149,12 @@ def generate_full_solution(allowed_values: list, block_dim: tuple) -> list:
     board = [
         [0 for _ in range(nallowed_values)] for _ in range(nallowed_values)
     ]
-    fill_board(board, allowed_values, block_dim)
+    # Fill the board using backtracking
+    fill_board(board, allowed_values, block_dim, seed)
     return board
 
 
-def _remove_elements(board: list, nremove: int) -> np.ndarray:
+def _remove_elements(board: list, nremove: int, seed: int = None) -> np.ndarray:
     """Randomly remove elements from a solved board.
 
     Parameters
@@ -152,6 +163,8 @@ def _remove_elements(board: list, nremove: int) -> np.ndarray:
         Filled sudoku board.
     nremove: int
         Number of cells to remove.
+    seed: int, optional
+        Random seed for shuffling cells.
 
     Returns
     -------
@@ -168,6 +181,8 @@ def _remove_elements(board: list, nremove: int) -> np.ndarray:
 
     # List of all cell positions and shuffle them
     cells = [(r, c) for r in range(nvals) for c in range(nvals)]
+    if seed is not None:
+        random.seed(seed)
     random.shuffle(cells)
 
     for ii in range(nremove):
@@ -176,7 +191,9 @@ def _remove_elements(board: list, nremove: int) -> np.ndarray:
     return board_problem
 
 
-def _get_ncells_to_remove(level: int, nallowed_values: int) -> int:
+def _get_ncells_to_remove(
+    level: int, nallowed_values: int, seed: int = None
+) -> int:
     """Get the number of cells to remove, given the level of problem requested.
 
     Here, we decide on the maximum and minimum number of cells to retain in the
@@ -193,12 +210,16 @@ def _get_ncells_to_remove(level: int, nallowed_values: int) -> int:
         difficulty.
     nallowed_values: int
         Number of allowed values in the Sudoku board, e.g., 81 for 9-by-9 board.
+    seed: int, optional
+        Random seed for selecting number of cells to remove.
 
     Returns
     -------
     int
         Number of cells to remove.
     """
+    if seed is not None:
+        np.random.seed(seed)
     ncells = nallowed_values**2
     if ncells > 4:
         # Padding to make subsequent levels more distinct
@@ -239,7 +260,8 @@ def generate_problem(
     level: int = 3,
     allowed_values: list = range(1, 10),
     block_dim: tuple = (3, 3),
-    verbose: bool = True,
+    seed: int = None,
+    verbose: bool = False,
     return_solution: bool = False,
 ) -> list:
     """Main function to generate a Sudoku problem board.
@@ -260,6 +282,8 @@ def generate_problem(
         A tuple indicating the block dimensions, i.e., number of rows and
         columns in each block. The default is (3, 3), which is the normal
         Sudoku setup.
+    seed: int, optional
+        Random seed for generating the board.
     verbose: bool, optional
         Whether to print progress messages. The default is True.
     return_solution: bool, optional
@@ -290,8 +314,8 @@ def generate_problem(
     # Randomly remove elements according to the requested level
     if verbose:
         print("Creating problem by removing elements...")
-    nremove = _get_ncells_to_remove(level, len(allowed_values))
-    board_problem = _remove_elements(solution, nremove)
+    nremove = _get_ncells_to_remove(level, len(allowed_values), seed)
+    board_problem = _remove_elements(solution, nremove, seed)
     if verbose:
         print("Problem generated.")
 
