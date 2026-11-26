@@ -334,27 +334,15 @@ class Sudoku:
                 # Counter the iteration increment below
                 self.niter -= 1
 
-            else:
-                idx_sort = np.argsort(nposs_vals)
-                key_sorted = [list(empty_cells_dict)[ii] for ii in idx_sort]
-                empty_cells_dict = {
-                    ii: empty_cells_dict[ii] for ii in key_sorted
-                }
-                self._update_intermediate_state(empty_cells_dict)
+            elif empty_cells_dict:
+                self._update_intermediate_state(empty_cells_dict, nposs_vals)
 
                 # Retrieve data from the last intermediate state
                 last_state = self._intermediate_state[self.niter]
-                ii = list(last_state["test_cells"])[-1]
-                if ii == "EOL":
-                    # We have exhausted all possible cells and values. Need
-                    # to go back 2 steps above. We can't just go back one
-                    # step, because we have already tried all possible
-                    # values.
-                    # Go back one step and delete the cached state.
+                if last_state["tried_idx"] >= len(last_state["candidates"]):
+                    # We have exhausted all possible values for this cell.
+                    # Pop this dead state and revert to the previous saved state.
                     self._revert_state(pop=True)
-                    # Go back to the second previous state and start the
-                    # test from this state
-                    self._revert_state()
 
                     if verbose:
                         print(
@@ -365,41 +353,16 @@ class Sudoku:
                     self.niter -= 1
 
                 else:
-                    val = last_state["test_cells"][ii]
-                    # for ii, val in last_state["test_cells"].items():
-                    cell = empty_cells_dict[ii]
-                    new_vals = sorted(
-                        list(set(cell.possible_values) - set(val[:-1]))
-                    )
-                    if new_vals:
-                        value = new_vals[0]
-                        self.update_board_value(value, cell)
-                        if verbose:
-                            print(
-                                f"Try setting cell [{cell.row_idx}, "
-                                f"{cell.column_idx}] to {value} "
-                                f"(possible values: {cell.possible_values})"
-                            )
-                #     break
-
-                # if ii == key_sorted[-1]:
-                #     # We have exhausted all possible cells and values. Need
-                #     # to go back 2 steps above. We can't just go back one
-                #     # step, because we have already tried all possible
-                #     # values.
-                #     # Go back one step and delete the cached state.
-                #     self._revert_state(pop=True)
-                #     # Go back to the second previous state and start the
-                #     # test from this state
-                #     self._revert_state()
-
-                #     if verbose:
-                #         print(
-                #             "No more values to try, "
-                #             f"reverting to iteration {self.niter}"
-                #         )
-                #     # Counter the iteration increment below
-                #     self.niter -= 1
+                    cell = empty_cells_dict[last_state["cell_key"]]
+                    value = last_state["candidates"][last_state["tried_idx"]]
+                    last_state["tried_idx"] += 1
+                    if verbose:
+                        print(
+                            f"Try setting cell [{cell.row_idx}, "
+                            f"{cell.column_idx}] to {value} "
+                            f"(possible values: {last_state['candidates']})"
+                        )
+                    self.update_board_value(value, cell)
 
         self.niter += 1
         self._nstep_call += 1
@@ -470,47 +433,33 @@ class Sudoku:
                     self.update_board_value(val, cell)
                     break
 
-    def _update_intermediate_state(self, test_cells: Dict[int, Cell]):
-        """Update the information of the intermediate state."""
-        self._intermediate_state.setdefault(
-            self.niter, {"board": self.board.copy(), "test_cells": {}}
-        )
-
-        break_outer_loop = False
-        state_updated = False
-        for ii, cell in test_cells.items():
-            self._intermediate_state[self.niter]["test_cells"].setdefault(
-                ii, []
-            )
-
-            test_values = cell.possible_values.copy()
-            tried_values = self._intermediate_state[self.niter]["test_cells"][
-                ii
-            ]
-            for val in test_values:
-                if val not in tried_values:
-                    self._intermediate_state[self.niter]["test_cells"][
-                        ii
-                    ].append(val)
-                    break_outer_loop = True
-                    state_updated = True
-                    break
-
-            if break_outer_loop:
-                break
-
-        if not state_updated:
-            self._intermediate_state[self.niter]["test_cells"].update(
-                {"EOL": None}
-            )
+    def _update_intermediate_state(
+        self, empty_cells_dict: Dict[int, Cell], nposs_vals: Sequence[int]
+    ):
+        """Store the intermediate state for the empty cell with fewest possible
+        values if not already cached for the current iteration.
+        """
+        if self.niter not in self._intermediate_state:
+            min_idx = min(range(len(nposs_vals)), key=nposs_vals.__getitem__)
+            cell_key = list(empty_cells_dict)[min_idx]
+            cell = empty_cells_dict[cell_key]
+            self._intermediate_state[self.niter] = {
+                "board": copy.deepcopy(self.board),
+                "cell_key": cell_key,
+                "candidates": list(cell.possible_values),
+                "tried_idx": 0,
+            }
 
     def _revert_state(self, pop=False):
-        """Revert to the previous state."""
-        # Revert the previous state
-        self.niter = list(self._intermediate_state)[-1]
-        self.board = self._intermediate_state[self.niter]["board"]
+        """Revert to the previous saved state."""
+        if not self._intermediate_state:
+            raise ValueError("The Sudoku board has no valid solution.")
         if pop:
-            self._intermediate_state.pop(self.niter)
+            self._intermediate_state.popitem()
+            if not self._intermediate_state:
+                raise ValueError("The Sudoku board has no valid solution.")
+        self.niter = list(self._intermediate_state)[-1]
+        self.board = copy.deepcopy(self._intermediate_state[self.niter]["board"])
 
     def _cells_same(self, cells1: Sequence[Cell], cells2: Sequence[Cell]):
         """Compare the cells, check if they are the same."""
