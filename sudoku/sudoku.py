@@ -86,6 +86,10 @@ class Sudoku:
 
         # Initializations
         self._board = None
+        self._cells_cache = None
+        self._cells_by_block = None
+        self._cells_by_row = None
+        self._cells_by_column = None
         self.orig_board = copy.deepcopy(board)
         self._intermediate_state = {}
         self.niter = 0
@@ -139,9 +143,30 @@ class Sudoku:
         )
 
         self._board = copy.deepcopy(board)
+        self._rebuild_cell_cache()
         self.validate_board()
         if self.orig_board is None:
             self.orig_board = copy.deepcopy(board)
+
+    def _rebuild_cell_cache(self):
+        """Build cached Cell objects and group views bound to self._board."""
+        self._cells_cache = [
+            Cell(self._board, [row, col], self.allowed_values, self.block_dim)
+            for row in range(self._nallowed_values)
+            for col in range(self._nallowed_values)
+        ]
+        self._cells_by_block = [
+            [cell for cell in self._cells_cache if cell.block_idx == b]
+            for b in range(self._nblocks)
+        ]
+        self._cells_by_row = [
+            [cell for cell in self._cells_cache if cell.row_idx == r]
+            for r in range(self._nallowed_values)
+        ]
+        self._cells_by_column = [
+            [cell for cell in self._cells_cache if cell.column_idx == c]
+            for c in range(self._nallowed_values)
+        ]
 
     def validate_board(self):
         """Validate the board by checking if there is any repeated, non-zero
@@ -239,11 +264,13 @@ class Sudoku:
             A 2D array of the same shape as the board that contains
             :class:`~sudoku.cell.Cell` for each cell in the board.
         """
-        return np.array(self._cells_flatten).reshape(np.array(self.board).shape)
+        return np.array(self._cells_flatten).reshape(
+            self._nallowed_values, self._nallowed_values
+        )
 
     @property
     def _cells_flatten(self) -> List[Cell]:
-        """Scan the board and create :class:`~sudoku.cell.Cell` instances.
+        """Return cached :class:`~sudoku.cell.Cell` instances for the board.
 
         Returns
         -------
@@ -251,12 +278,12 @@ class Sudoku:
             A list that contains :class:`~sudoku.cell.Cell` for each cell in
             the board.
         """
-        cells = [
-            Cell(self.board, [row, col], self.allowed_values, self.block_dim)
-            for row in range(self._nallowed_values)
-            for col in range(self._nallowed_values)
-        ]
-        return cells
+        if (
+            self._cells_cache is None
+            or self._cells_cache[0]._board is not self._board
+        ):
+            self._rebuild_cell_cache()
+        return self._cells_cache
 
     def _get_empty_cells(self, fmt="list") -> Sequence[Cell]:
         """List all the empty cells."""
@@ -314,21 +341,18 @@ class Sudoku:
 
         # Try updating the cells by looking up and comparing the lists of
         # possible values.
-        old_cells = copy.deepcopy(
-            self._cells_flatten
-        )  # Cells before the update
+        old_board = [row[:] for row in self._board]
         self._update_cells()
-        new_cells = copy.deepcopy(self._cells_flatten)  # Cells after the update
         if verbose:
             print(
                 f"Iteration {self.niter}: "
                 f"{len(self._get_empty_cells())} empty cells left."
             )
 
-        # Compare the cells before and after the update. If the above algorithm
-        # fails to update the cells, then try setting one of the cell to a
+        # Compare the board before and after the update. If the above algorithm
+        # fails to update any cells, then try setting one of the cells to a
         # value.
-        if self._cells_same(old_cells, new_cells):
+        if self._board == old_board:
             empty_cells_dict = self._get_empty_cells(fmt="dict")
             nposs_vals = [
                 len(cell.possible_values) for cell in empty_cells_dict.values()
@@ -381,46 +405,36 @@ class Sudoku:
 
     def _update_cells(self):
         """Update the cells values."""
+        # Ensure cell cache is synchronized with self._board
+        _ = self._cells_flatten
         # When the cell only has one possible value
         self._update_cells_from_single_possible_value()
         # Another option is to look if there is any value that can only go into
         # a specific cell, i.e., there is only one occurence in the list of
         # possible values
-        for block in range(self._nblocks):
-            cells_block = [
-                cell
-                for cell in self._cells_flatten
-                if cell.block_idx == block and cell.is_empty
-            ]
+        for block_cells in self._cells_by_block:
+            cells_block = [cell for cell in block_cells if cell.is_empty]
             self._update_cells_from_single_possible_occurence(cells_block)
-        for row in range(self._nallowed_values):
-            cells_row = [
-                cell
-                for cell in self._cells_flatten
-                if cell.row_idx == row and cell.is_empty
-            ]
+        for row_cells in self._cells_by_row:
+            cells_row = [cell for cell in row_cells if cell.is_empty]
             self._update_cells_from_single_possible_occurence(cells_row)
-        for column in range(self._nallowed_values):
-            cells_column = [
-                cell
-                for cell in self._cells_flatten
-                if cell.column_idx == column and cell.is_empty
-            ]
+        for col_cells in self._cells_by_column:
+            cells_column = [cell for cell in col_cells if cell.is_empty]
             self._update_cells_from_single_possible_occurence(cells_column)
 
     def _update_cells_from_single_possible_value(self):
         """Update the cells that have only one possible value."""
-        ncells = len(self._cells_flatten)
+        cells = self._cells_flatten
         while True:
             n = 0
-            for ii in range(ncells):
-                cell = self._cells_flatten[ii]
+            for cell in cells:
                 if cell.is_empty:
-                    if len(cell.possible_values) == 1:
+                    poss_vals = cell.possible_values
+                    if len(poss_vals) == 1:
                         # There is only 1 possible value that can go into this
                         # empty cell
                         self.update_board_value(
-                            cell.possible_values[0], cell, validate=False
+                            poss_vals[0], cell, validate=False
                         )
                         n += 1
             if n == 0:
@@ -435,18 +449,21 @@ class Sudoku:
         values in other empty cells within the same group. If such value
         exists, then we can only put that value in that cell.
         """
+        poss_by_cell = {
+            cell: cell.possible_values for cell in cells_group if cell.is_empty
+        }
         for cell in cells_group:
-            if not cell.is_empty:
+            if cell not in poss_by_cell:
                 continue
-            for val in cell.possible_values:
+            for val in poss_by_cell[cell]:
                 val_in_other_cell = False
-                for cl in cells_group:
-                    if cl != cell:
-                        if val in cl.possible_values:
-                            val_in_other_cell = True
-                            break
+                for cl, cl_poss in poss_by_cell.items():
+                    if cl != cell and val in cl_poss:
+                        val_in_other_cell = True
+                        break
                 if not val_in_other_cell:
                     self.update_board_value(val, cell, validate=False)
+                    del poss_by_cell[cell]
                     break
 
     def _update_intermediate_state(

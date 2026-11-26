@@ -34,7 +34,8 @@ class GroupABC(ABC):
         """Return the values that are not present in the group.
         The values listed here are the ones that can be used to fill the group.
         """
-        return [v for v in self.allowed_values if v not in self.values]
+        values_set = set(self.values)
+        return [v for v in self.allowed_values if v not in values_set]
 
     @property
     def solved(self) -> bool:
@@ -88,21 +89,14 @@ class Block(GroupABC):
 
     @property
     def values_2d(self) -> np.ndarray:
-        board_shape = np.array(self.board).shape
-        nblock_rows = board_shape[0] // self.dim[0]
-        nblock_columns = board_shape[1] // self.dim[1]
+        nblock_columns = len(self.board[0]) // self.dim[1]
 
         row_start = (self.idx // nblock_columns) * self.dim[0]
         col_start = (self.idx % nblock_columns) * self.dim[1]
-        values = []
-        for ii in range(row_start, row_start + self.dim[0]):
-            values.append(
-                [
-                    self.board[ii][jj]
-                    for jj in range(col_start, col_start + self.dim[1])
-                ]
-            )
-        return values
+        return [
+            self.board[ii][col_start : col_start + self.dim[1]]
+            for ii in range(row_start, row_start + self.dim[0])
+        ]
 
     def __repr__(self):
         return f"Block {self.idx}"
