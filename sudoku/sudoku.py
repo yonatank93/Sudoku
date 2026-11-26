@@ -534,13 +534,20 @@ class Sudoku:
         with open(filename, "rb") as f:
             state = pickle.load(f)
 
-        self.board = state["board"]
-        self.orig_board = state["orig_board"]
         self.allowed_values = state["allowed_values"]
         self._nallowed_values = len(self.allowed_values)
         self.block_dim = state["block_dim"]
         self._nblocks = self.block_dim[0] * self.block_dim[1]
-        self._intermediate_state = state["intermediate_state"]
+        self.orig_board = copy.deepcopy(state["orig_board"])
+        if state["board"] is not None:
+            self.board = state["board"]
+        else:
+            self._board = None
+            self._cells_cache = None
+            self._cells_by_block = None
+            self._cells_by_row = None
+            self._cells_by_column = None
+        self._intermediate_state = copy.deepcopy(state["intermediate_state"])
         self.niter = state["niter"]
         self._nstep_call = state["nstep_call"]
 
