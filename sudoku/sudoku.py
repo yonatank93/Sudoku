@@ -114,12 +114,7 @@ class Sudoku:
             zero means that the cell is empty.
         """
         # Convert the format as necessary
-        _board = []
-        for rows in board:
-            if isinstance(rows, str):
-                _board.append([val for val in rows])
-            else:
-                _board.append(rows)
+        _board = [list(row) for row in board]
         board = copy.deepcopy(_board)
         # Check if the board has the correct shape
         assert np.array(board).shape == (
@@ -162,10 +157,27 @@ class Sudoku:
                     set(nonzero_vals)
                 ), f"Board is invalid; there is a repetition in {group}"
 
-    def update_board_value(self, val: float, cell: Cell):
-        board = copy.deepcopy(self.board)
-        board[cell.row_idx][cell.column_idx] = val
-        self.board = board
+    def update_board_value(self, val, cell: Cell, validate: bool = True):
+        """Update the value of a single cell on the board in place."""
+        if validate:
+            assert (
+                val in self.allowed_values or val in empty_cell_repr
+            ), f"Value ({val}) is not in allowed values ({self.allowed_values})."
+            old_val = self._board[cell.row_idx][cell.column_idx]
+            self._board[cell.row_idx][cell.column_idx] = val
+            try:
+                for group in (cell.row, cell.column, cell.block):
+                    nonzero_vals = [
+                        v for v in group.values if v not in empty_cell_repr
+                    ]
+                    assert len(nonzero_vals) == len(
+                        set(nonzero_vals)
+                    ), f"Board is invalid; there is a repetition in {group}"
+            except AssertionError:
+                self._board[cell.row_idx][cell.column_idx] = old_val
+                raise
+        else:
+            self._board[cell.row_idx][cell.column_idx] = val
 
     @property
     def rows(self) -> List[Row]:
@@ -267,13 +279,13 @@ class Sudoku:
     @property
     def solved(self) -> bool:
         """Check if the board is solved."""
-        noccur = self._count_occurence()
-        if len(self._get_empty_cells()) == 0 and np.all(
-            [occ == self._nallowed_values for occ in noccur]
-        ):
-            return True
-        else:
+        if len(self._get_empty_cells()) != 0:
             return False
+        return all(
+            group.solved
+            for groups in (self.rows, self.columns, self.blocks)
+            for group in groups
+        )
 
     def solve(
         self,
@@ -362,7 +374,7 @@ class Sudoku:
                             f"{cell.column_idx}] to {value} "
                             f"(possible values: {last_state['candidates']})"
                         )
-                    self.update_board_value(value, cell)
+                    self.update_board_value(value, cell, validate=False)
 
         self.niter += 1
         self._nstep_call += 1
@@ -407,7 +419,9 @@ class Sudoku:
                     if len(cell.possible_values) == 1:
                         # There is only 1 possible value that can go into this
                         # empty cell
-                        self.update_board_value(cell.possible_values[0], cell)
+                        self.update_board_value(
+                            cell.possible_values[0], cell, validate=False
+                        )
                         n += 1
             if n == 0:
                 break
@@ -422,6 +436,8 @@ class Sudoku:
         exists, then we can only put that value in that cell.
         """
         for cell in cells_group:
+            if not cell.is_empty:
+                continue
             for val in cell.possible_values:
                 val_in_other_cell = False
                 for cl in cells_group:
@@ -430,7 +446,7 @@ class Sudoku:
                             val_in_other_cell = True
                             break
                 if not val_in_other_cell:
-                    self.update_board_value(val, cell)
+                    self.update_board_value(val, cell, validate=False)
                     break
 
     def _update_intermediate_state(
