@@ -57,7 +57,7 @@ class Cell:
     @property
     def is_empty(self) -> bool:
         """Check if the cell is empty, i.e., has no value."""
-        return self.value in [0, "0", None, ""]
+        return self.value in empty_cell_repr
 
     @property
     def possible_values(self) -> Sequence[int]:
@@ -65,15 +65,15 @@ class Cell:
         It returns an empty list if the cell is not empty, showing that we
         cannot put any other value in that cell.
         """
-        if not self:
+        if not self.is_empty:
             return []
         block_missing_values = set(self.block.missing_values)
         row_missing_values = set(self.row.missing_values)
         column_missing_values = set(self.column.missing_values)
-        combined_missing_values = list(
+        combined_missing_values = (
             block_missing_values & row_missing_values & column_missing_values
         )
-        # Sorted
+        # Sorted according to allowed_values order
         sorted_missing_values = [
             v for v in self.allowed_values if v in combined_missing_values
         ]
