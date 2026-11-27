@@ -315,6 +315,7 @@ class TestWebAppTemplate(unittest.TestCase):
     def setUp(self):
         env = jinja2.Environment(loader=jinja2.FileSystemLoader(str(TEMPLATE_DIR)))
         env.globals["url_for"] = lambda endpoint, filename="": f"/{endpoint}/{filename}"
+        env.filters["tojson"] = json.dumps
         self.template = env.get_template("sudoku.html")
         self.empty = [[0] * 9 for _ in range(9)]
 
@@ -323,7 +324,7 @@ class TestWebAppTemplate(unittest.TestCase):
         self.assertTrue((static_dir / "style.css").is_file())
         self.assertTrue((static_dir / "app.js").is_file())
 
-    def test_template_fresh_get_not_readonly_or_disabled(self):
+    def test_template_fresh_get_renders_controls_and_initial_state(self):
         rendered = self.template.render(
             solution=self.empty,
             original_puzzle=self.empty,
@@ -333,10 +334,12 @@ class TestWebAppTemplate(unittest.TestCase):
         self.assertIn('data-initial-solved="false"', rendered)
         self.assertIn("/static/style.css", rendered)
         self.assertIn("/static/app.js", rendered)
-        table_html = rendered.split("<table")[1].split("</table>")[0]
-        self.assertNotIn("readonly", table_html)
+        self.assertIn('id="boardSize"', rendered)
+        self.assertIn('id="themeToggle"', rendered)
+        self.assertIn('id="sudokuBoard"', rendered)
+        self.assertIn('"is_solved": false', rendered)
 
-    def test_template_error_post_preserves_editable_cells_and_shows_error(self):
+    def test_template_error_post_embeds_board_and_error(self):
         partial = [r[:] for r in self.empty]
         partial[0][0] = 5
         rendered = self.template.render(
@@ -347,11 +350,9 @@ class TestWebAppTemplate(unittest.TestCase):
         )
         self.assertIn('data-initial-solved="false"', rendered)
         self.assertIn("Board is invalid", rendered)
-        table_html = rendered.split("<table")[1].split("</table>")[0]
-        self.assertIn('value="5"', table_html)
-        self.assertNotIn("readonly", table_html)
+        self.assertIn('"is_solved": false', rendered)
 
-    def test_template_solved_post_locks_cells_and_marks_prefilled(self):
+    def test_template_solved_post_embeds_solved_state(self):
         b01 = _load_board_01()
         rendered = self.template.render(
             solution=b01["solution"],
@@ -360,10 +361,7 @@ class TestWebAppTemplate(unittest.TestCase):
             error_message="",
         )
         self.assertIn('data-initial-solved="true"', rendered)
-        table_html = rendered.split("<table")[1].split("</table>")[0]
-        self.assertEqual(table_html.count("readonly"), 81)
-        n_clues = sum(cell > 0 for row in b01["board"] for cell in row)
-        self.assertEqual(table_html.count('class="prefilled"'), n_clues)
+        self.assertIn('"is_solved": true', rendered)
 
 
 @unittest.skipUnless(HAS_FLASK, "flask is not installed")

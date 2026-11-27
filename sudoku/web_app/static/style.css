@@ -1,44 +1,387 @@
-/* CSS to make input boxes square */
-input[type="text"] {
-    width: 40px;   /* Set width of the input */
-    height: 40px;  /* Set height to be the same as width for a square */
-    text-align: center; /* Center the text inside the box */
-    font-size: 20px; /* Make the font larger for better visibility */
-    border: 1px solid #f4f4f4; /* Single border around each input */
-    padding: 0; /* Remove extra padding inside the input */
-    margin: 0; /* Remove margin to avoid extra space around the input */
-    box-sizing: border-box; /* Ensure padding and border are included in the width and height */
+:root {
+    --bg: #f4f6fb;
+    --surface: #ffffff;
+    --surface-subtle: #eef2f8;
+    --text: #182030;
+    --text-muted: #5c6880;
+    --border: #cfd7e6;
+    --border-strong: #1e293b;
+    --primary: #2563eb;
+    --primary-hover: #1d4ed8;
+    --accent: #0f766e;
+    --accent-hover: #0d625c;
+    --danger: #dc2626;
+    --danger-hover: #b91c1c;
+    --clue-bg: #e9eef7;
+    --clue-text: #111827;
+    --user-text: #2563eb;
+    --solver-text: #0f766e;
+    --selected-bg: #dbeafe;
+    --selected-ring: #2563eb;
+    --success-text: #15803d;
+    --error-text: #dc2626;
+    --shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+    --radius: 12px;
 }
 
-table {
-    border-collapse: collapse; /* Collapse borders to avoid double borders */
-    border-spacing: 0; /* Remove space between cells */
+[data-theme="dark"] {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface-subtle: #283548;
+    --text: #f1f5f9;
+    --text-muted: #94a3b8;
+    --border: #3b4c66;
+    --border-strong: #e2e8f0;
+    --primary: #3b82f6;
+    --primary-hover: #2563eb;
+    --accent: #14b8a6;
+    --accent-hover: #0d9488;
+    --danger: #ef4444;
+    --danger-hover: #dc2626;
+    --clue-bg: #29384e;
+    --clue-text: #f8fafc;
+    --user-text: #60a5fa;
+    --solver-text: #2dd4bf;
+    --selected-bg: #1e3a5f;
+    --selected-ring: #60a5fa;
+    --success-text: #4ade80;
+    --error-text: #f87171;
+    --shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
 }
 
-td {
-    padding: 0; /* Remove extra padding in table cells */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
 }
 
-/* Thicker border for 3x3 box boundaries */
-td:nth-child(3n) {
-    border-right: 5px solid black; /* Thicker right border for every 3rd column */
+body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+        Ubuntu, Cantarell, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-tr:nth-child(3n) td {
-    border-bottom: 5px solid black; /* Thicker bottom border for every 3rd row */
+.app-shell {
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 24px 16px 40px;
 }
 
-/* Ensure bottom and right borders are not visible */
-tr:nth-last-child(1) td {
-    border-bottom: none;
+.app-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 18px;
 }
 
-td:nth-last-child(1) {
+.brand h1 {
+    margin: 0;
+    font-size: 1.9rem;
+    letter-spacing: -0.02em;
+}
+
+.subtitle {
+    margin: 4px 0 0;
+    font-size: 0.92rem;
+    color: var(--text-muted);
+}
+
+.panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    box-shadow: var(--shadow);
+    margin-bottom: 18px;
+}
+
+.control-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 14px;
+}
+
+.control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.control-group label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.difficulty-group {
+    flex: 1 1 200px;
+}
+
+.generate-group {
+    margin-left: auto;
+}
+
+select,
+input[type="text"],
+input[type="number"] {
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface-subtle);
+    color: var(--text);
+    font-size: 0.92rem;
+}
+
+input[type="range"] {
+    width: 100%;
+    accent-color: var(--primary);
+    cursor: pointer;
+}
+
+.badge {
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--surface-subtle);
+    color: var(--text);
+}
+
+.custom-config {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 12px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+}
+
+.custom-config .small-input {
+    width: 96px;
+}
+
+.hidden {
+    display: none !important;
+}
+
+.board-stage {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+}
+
+.board-container {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    overflow-x: auto;
+    padding: 4px;
+}
+
+.sudoku-board {
+    --grid-size: 9;
+    --cell-size: 48px;
+    display: grid;
+    grid-template-columns: repeat(var(--grid-size), var(--cell-size));
+    grid-template-rows: repeat(var(--grid-size), var(--cell-size));
+    border: 3px solid var(--border-strong);
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+}
+
+.sudoku-board.size-16 {
+    --cell-size: 36px;
+}
+
+.cell {
+    position: relative;
+    width: var(--cell-size);
+    height: var(--cell-size);
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.12s ease;
+}
+
+.cell.last-col {
     border-right: none;
 }
 
-.prefilled {
-    background-color: lightgray; /* Highlight prefilled cells */
-    font-weight: bold; /* Make text bold */
-    cursor: not-allowed; /* Indicate readonly cells with cursor */
+.cell.last-row {
+    border-bottom: none;
+}
+
+.cell.block-right {
+    border-right: 3px solid var(--border-strong);
+}
+
+.cell.block-bottom {
+    border-bottom: 3px solid var(--border-strong);
+}
+
+.cell-input {
+    width: 100%;
+    height: 100%;
+    border: none;
+    outline: none;
+    background: transparent;
+    text-align: center;
+    font-size: calc(var(--cell-size) * 0.48);
+    font-weight: 600;
+    color: var(--user-text);
+    padding: 0;
+    margin: 0;
+    caret-color: transparent;
+    cursor: pointer;
+}
+
+.cell.prefilled {
+    background: var(--clue-bg);
+}
+
+.cell.prefilled .cell-input {
+    color: var(--clue-text);
+    font-weight: 700;
+    cursor: default;
+}
+
+.cell.solver-filled .cell-input {
+    color: var(--solver-text);
+}
+
+.cell.selected {
+    background: var(--selected-bg);
+    box-shadow: inset 0 0 0 2px var(--selected-ring);
+    z-index: 1;
+}
+
+.status-message {
+    min-height: 1.5em;
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    text-align: center;
+    color: var(--text-muted);
+}
+
+.status-message.status-success {
+    color: var(--success-text);
+}
+
+.status-message.status-error {
+    color: var(--error-text);
+}
+
+.action-bar {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+}
+
+.btn {
+    border: 1px solid transparent;
+    border-radius: 8px;
+    padding: 9px 16px;
+    font-size: 0.92rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.15s ease, opacity 0.15s ease, transform 0.05s ease;
+}
+
+.btn:active:not(:disabled) {
+    transform: translateY(1px);
+}
+
+.btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.btn-primary {
+    background: var(--primary);
+    color: #ffffff;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: var(--primary-hover);
+}
+
+.btn-accent {
+    background: var(--accent);
+    color: #ffffff;
+}
+
+.btn-accent:hover:not(:disabled) {
+    background: var(--accent-hover);
+}
+
+.btn-secondary {
+    background: var(--surface-subtle);
+    color: var(--text);
+    border-color: var(--border);
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background: var(--border);
+}
+
+.btn-ghost {
+    background: transparent;
+    color: var(--text);
+    border-color: var(--border);
+}
+
+.btn-ghost:hover:not(:disabled) {
+    background: var(--surface-subtle);
+}
+
+.btn-danger {
+    background: var(--danger);
+    color: #ffffff;
+}
+
+.btn-danger:hover:not(:disabled) {
+    background: var(--danger-hover);
+}
+
+@media (max-width: 600px) {
+    .sudoku-board {
+        --cell-size: 38px;
+    }
+
+    .sudoku-board.size-16 {
+        --cell-size: 24px;
+    }
+
+    .generate-group {
+        margin-left: 0;
+        width: 100%;
+    }
+
+    .generate-group .btn {
+        width: 100%;
+    }
 }

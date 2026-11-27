@@ -3,63 +3,97 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sudoku Solver</title>
+    <title>Sudoku</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 
 <body data-initial-solved="{{ 'true' if is_solved else 'false' }}">
-    <h1>Play Sudoku!</h1>
-    <p style="font-size: 20px; font-weight: bold; text-decoration: underline;">
-        Instructions:
-    </p>
-    <p>
-        Select a difficulty level using the slider, click <strong>"Generate Problem"</strong>, and enjoy solving the Sudoku!
-        <br>
-        Or, enter your own Sudoku puzzle and click <strong>"Solve"</strong> to find the solution.
-    </p>
+    <script id="initialState" type="application/json">{{ {
+        "solution": solution,
+        "original_puzzle": original_puzzle,
+        "is_solved": is_solved,
+        "error_message": error_message or ""
+    } | tojson }}</script>
 
-    <form method="POST" onsubmit="storeDifficulty()">
-        <!-- Difficulty Slider -->
-        <label for="difficulty"><strong>Difficulty</strong>:</label>
-        <span>Easy</span> <!-- Left label -->
-        <input type="range" id="difficulty" min="1" max="5" value="3" step="1">
-        <span>Hard</span> <!-- Right label -->
+    <div class="app-shell">
+        <header class="app-header">
+            <div class="brand">
+                <h1>Sudoku</h1>
+                <p class="subtitle">Play, explore custom dimensions, or watch the solver work.</p>
+            </div>
+            <div class="header-actions">
+                <button type="button" id="themeToggle" class="btn btn-ghost" aria-label="Toggle dark mode">
+                    Dark Mode
+                </button>
+            </div>
+        </header>
 
-        <!-- Generate Problem Button -->
-        <button type="button" id="generateProblem">Generate Problem</button>
-        <br><br>
+        <section class="panel controls-panel" aria-label="Puzzle controls">
+            <div class="control-row">
+                <div class="control-group">
+                    <label for="boardSize">Board Size</label>
+                    <select id="boardSize">
+                        <option value="4x4">4×4 (2×2 blocks)</option>
+                        <option value="6x6">6×6 (2×3 blocks)</option>
+                        <option value="8x8">8×8 (2×4 blocks)</option>
+                        <option value="9x9" selected>9×9 (3×3 blocks)</option>
+                        <option value="16x16">16×16 (4×4 hex)</option>
+                        <option value="custom">Custom…</option>
+                    </select>
+                </div>
 
-        <table border="1">
-            {% for i in range(9) %}
-            <tr>
-                {% for j in range(9) %}
-                <td>
-                    <input type="text" name="cell{{i}}{{j}}" size="1" maxlength="1"
-                           oninput="this.value = this.value.replace(/[^1-9]/g, '')"
-                           value="{{ solution[i][j] if solution[i][j] > 0 else '' }}"
-                           {% if is_solved and solution[i][j] > 0 %} readonly {% endif %}
-                           {% if original_puzzle[i][j] > 0 %} class="prefilled" {% endif %}>
-                </td>
-                {% endfor %}
-            </tr>
-            {% endfor %}
-        </table>
-        <br>
-        <p id="solutionMessage" style="font-size: 24px; font-weight: bold;{% if error_message %} color: red;{% endif %}">{{ error_message or '' }}</p>
+                <div class="control-group difficulty-group">
+                    <div class="label-row">
+                        <label for="difficulty">Difficulty</label>
+                        <span id="difficultyLabel" class="badge">3 — Medium</span>
+                    </div>
+                    <input type="range" id="difficulty" min="1" max="5" value="3" step="1">
+                </div>
 
-        <!-- Check Solution Button -->
-        <button type="button" id="checkSolution"><strong>Check Solution</strong></button>
+                <div class="control-group generate-group">
+                    <button type="button" id="generateProblem" class="btn btn-primary">
+                        Generate Puzzle
+                    </button>
+                </div>
+            </div>
 
-        <!-- Clear User Input Button -->
-        <button type="button" id="clearInput" onclick="clearUserInputs()">Clear Input</button>
-        <br><br>
+            <div id="customConfig" class="custom-config hidden">
+                <div class="control-group">
+                    <label for="customSymbols">Allowed Symbols</label>
+                    <input type="text" id="customSymbols" value="123456" placeholder="e.g. 123456 or A,B,C,D">
+                </div>
+                <div class="control-group small-input">
+                    <label for="customBlockRows">Block Rows</label>
+                    <input type="number" id="customBlockRows" min="1" max="16" value="2">
+                </div>
+                <div class="control-group small-input">
+                    <label for="customBlockCols">Block Cols</label>
+                    <input type="number" id="customBlockCols" min="1" max="16" value="3">
+                </div>
+                <div class="control-group">
+                    <button type="button" id="applyCustom" class="btn btn-secondary">Apply</button>
+                </div>
+            </div>
+        </section>
 
-        <!-- Solve Button -->
-        <button type="submit"><strong>Solve</strong></button>
+        <main class="board-stage">
+            <div id="boardContainer" class="board-container">
+                <div id="sudokuBoard" class="sudoku-board" role="grid" aria-label="Sudoku board"></div>
+            </div>
 
-        <!-- Reset Button (clears the input fields) -->
-        <button type="button" onclick="resetAll()">Reset All</button>
-    </form>
+            <p id="solutionMessage"
+               class="status-message{% if error_message %} status-error{% endif %}"
+               role="status"
+               aria-live="polite">{{ error_message or '' }}</p>
+
+            <div class="action-bar">
+                <button type="button" id="checkSolution" class="btn btn-secondary">Check Solution</button>
+                <button type="button" id="clearInput" class="btn btn-ghost">Clear Input</button>
+                <button type="button" id="solveBtn" class="btn btn-accent">Solve</button>
+                <button type="button" id="resetAll" class="btn btn-danger">Reset All</button>
+            </div>
+        </main>
+    </div>
 
     <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
