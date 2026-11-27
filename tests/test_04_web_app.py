@@ -1,10 +1,14 @@
 import importlib
+import importlib.util
 import json
+import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import types
 import unittest
+import zipfile
 from pathlib import Path
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
@@ -87,6 +91,36 @@ def _make_flask_stub():
     stub.render_template = lambda tmpl, **ctx: (tmpl, ctx)
     stub.jsonify = lambda obj: obj
     return stub
+
+
+class TestWebAppEngine(unittest.TestCase):
+    """Direct tests of the Flask-free engine module used by Flask and Pyodide."""
+
+    def test_engine_payload_roundtrip_without_flask(self):
+        from sudoku.web_app import engine
+
+        gen = engine.generate_payload(level=3, size="6x6")
+        self.assertEqual(gen["block_dim"], [2, 3])
+        self.assertEqual(len(gen["problem"]), 6)
+
+        solved = engine.solve_payload(gen)
+        self.assertGreater(solved["steps"], 0)
+        self.assertTrue(
+            engine.check_solution_payload(
+                {
+                    "problem": solved["solution"],
+                    "allowed_values": gen["allowed_values"],
+                    "block_dim": gen["block_dim"],
+                }
+            )["solved"]
+        )
+
+        steps = engine.solve_steps_payload(gen)
+        self.assertEqual(steps["solution"], solved["solution"])
+        self.assertEqual(steps["total_steps"], len(steps["steps"]))
+
+        with self.assertRaises(ValueError):
+            engine.generate_payload(level=9)
 
 
 class TestWebAppLogic(unittest.TestCase):
@@ -296,6 +330,7 @@ class TestWebAppTemplate(unittest.TestCase):
         static_dir = TEMPLATE_DIR.parent / "static"
         self.assertTrue((static_dir / "style.css").is_file())
         self.assertTrue((static_dir / "app.js").is_file())
+        self.assertTrue((static_dir / "pyodide_worker.js").is_file())
 
     def test_template_fresh_get_renders_controls_and_initial_state(self):
         rendered = self.template.render(
@@ -305,7 +340,17 @@ class TestWebAppTemplate(unittest.TestCase):
             error_message="",
         )
         self.assertIn('data-initial-solved="false"', rendered)
+        self.assertIn('data-mode="flask"', rendered)
         self.assertIn("/static/style.css", rendered)
+
+        rendered_pyodide = self.template.render(
+            solution=self.empty,
+            original_puzzle=self.empty,
+            is_solved=False,
+            error_message="",
+            app_mode="pyodide",
+        )
+        self.assertIn('data-mode="pyodide"', rendered_pyodide)
         self.assertIn("/static/app.js", rendered)
         self.assertIn('id="boardSize"', rendered)
         self.assertIn('id="themeToggle"', rendered)
@@ -347,14 +392,15 @@ class TestWebAppFrontendJS(unittest.TestCase):
     """Syntax-check and unit-test pure frontend JS helpers via Node."""
 
     def test_app_js_syntax(self):
-        app_js = STATIC_DIR / "app.js"
-        res = subprocess.run(
-            ["node", "--check", str(app_js)],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        self.assertEqual(res.returncode, 0, res.stderr)
+        for fname in ("app.js", "pyodide_worker.js"):
+            with self.subTest(file=fname):
+                res = subprocess.run(
+                    ["node", "--check", str(STATIC_DIR / fname)],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(res.returncode, 0, res.stderr)
 
     def test_app_js_pure_helpers(self):
         app_js = str(STATIC_DIR / "app.js")
@@ -413,6 +459,66 @@ class TestWebAppFrontendJS(unittest.TestCase):
             check=False,
         )
         self.assertEqual(res.returncode, 0, res.stderr)
+
+
+@unittest.skipUnless(HAS_JINJA2, "jinja2 is not installed")
+class TestGitHubPagesBuild(unittest.TestCase):
+    """Verify the static GitHub Pages Pyodide bundle builds and runs standalone."""
+
+    def test_build_site_and_standalone_zip_bundle(self):
+        script_path = (
+            Path(__file__).resolve().parent.parent / "scripts" / "build_gh_pages.py"
+        )
+        spec = importlib.util.spec_from_file_location("build_gh_pages", script_path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_dir = Path(tmpdir) / "site"
+            mod.build_site(out_dir)
+
+            for fname in (
+                "index.html",
+                ".nojekyll",
+                "style.css",
+                "app.js",
+                "pyodide_worker.js",
+                "sudoku_pkg.zip",
+            ):
+                self.assertTrue((out_dir / fname).is_file(), f"Missing {fname}")
+
+            html = (out_dir / "index.html").read_text(encoding="utf-8")
+            self.assertIn('data-mode="pyodide"', html)
+            self.assertIn('href="./style.css"', html)
+            self.assertIn('src="./app.js"', html)
+
+            # Extract sudoku_pkg.zip into a clean directory and run engine standalone
+            extract_dir = Path(tmpdir) / "unpacked"
+            with zipfile.ZipFile(out_dir / "sudoku_pkg.zip", "r") as zf:
+                names = set(zf.namelist())
+                self.assertIn("sudoku/web_app/engine.py", names)
+                self.assertNotIn("sudoku/web_app/app.py", names)
+                zf.extractall(extract_dir)
+
+            env = dict(os.environ)
+            env["PYTHONPATH"] = str(extract_dir)
+            probe = (
+                "from sudoku.web_app import engine; "
+                "g = engine.generate_payload(level=2, size='4x4'); "
+                "s = engine.solve_payload(g); "
+                "st = engine.solve_steps_payload(g); "
+                "c = engine.check_solution_payload({'problem': s['solution'], 'size': '4x4'}); "
+                "assert c['solved'] and st['solution'] == s['solution']"
+            )
+            res = subprocess.run(
+                [sys.executable, "-c", probe],
+                cwd=str(extract_dir),
+                env=env,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(res.returncode, 0, res.stderr)
 
 
 @unittest.skipUnless(HAS_FLASK, "flask is not installed")

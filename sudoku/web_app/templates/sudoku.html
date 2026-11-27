@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 
-<body data-initial-solved="{{ 'true' if is_solved else 'false' }}">
+<body data-initial-solved="{{ 'true' if is_solved else 'false' }}" data-mode="{{ app_mode|default('flask') }}">
     <script id="initialState" type="application/json">{{ {
         "solution": solution,
         "original_puzzle": original_puzzle,
