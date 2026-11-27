@@ -89,6 +89,36 @@ def _make_flask_stub():
     return stub
 
 
+class TestWebAppEngine(unittest.TestCase):
+    """Direct tests of the Flask-free engine module used by Flask and Pyodide."""
+
+    def test_engine_payload_roundtrip_without_flask(self):
+        from sudoku.web_app import engine
+
+        gen = engine.generate_payload(level=3, size="6x6")
+        self.assertEqual(gen["block_dim"], [2, 3])
+        self.assertEqual(len(gen["problem"]), 6)
+
+        solved = engine.solve_payload(gen)
+        self.assertGreater(solved["steps"], 0)
+        self.assertTrue(
+            engine.check_solution_payload(
+                {
+                    "problem": solved["solution"],
+                    "allowed_values": gen["allowed_values"],
+                    "block_dim": gen["block_dim"],
+                }
+            )["solved"]
+        )
+
+        steps = engine.solve_steps_payload(gen)
+        self.assertEqual(steps["solution"], solved["solution"])
+        self.assertEqual(steps["total_steps"], len(steps["steps"]))
+
+        with self.assertRaises(ValueError):
+            engine.generate_payload(level=9)
+
+
 class TestWebAppLogic(unittest.TestCase):
     """Tests web app helpers and route logic without requiring Flask installed."""
 
