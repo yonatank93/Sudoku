@@ -45,6 +45,39 @@ function createEmptyGrid(n) {
     return Array.from({ length: n }, () => Array(n).fill(""));
 }
 
+function createEmptyNotes(n) {
+    return Array.from({ length: n }, () =>
+        Array.from({ length: n }, () => new Set())
+    );
+}
+
+function cloneGrid(grid) {
+    return grid.map(row => [...row]);
+}
+
+function cloneNotes(notes) {
+    return notes.map(row => row.map(set => new Set(set)));
+}
+
+function clearPeerNotes(notes, row, col, symbol, blockDim) {
+    const n = notes.length;
+    notes[row][col].clear();
+    if (!symbol) return;
+    for (let r = 0; r < n; r++) {
+        for (let c = 0; c < n; c++) {
+            if (isSamePeer(row, col, r, c, blockDim)) {
+                notes[r][c].delete(symbol);
+            }
+        }
+    }
+}
+
+function formatTime(totalSeconds) {
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+}
+
 function isSamePeer(r1, c1, r2, c2, blockDim) {
     if (r1 === r2 || c1 === c2) return true;
     const [bRows, bCols] = blockDim;
@@ -121,10 +154,17 @@ const state = {
     allowedValues: [...BOARD_PRESETS["9x9"].allowedValues],
     blockDim: [...BOARD_PRESETS["9x9"].blockDim],
     board: createEmptyGrid(9),
+    notes: createEmptyNotes(9),
     prefilled: Array.from({ length: 9 }, () => Array(9).fill(false)),
     solverFilled: Array.from({ length: 9 }, () => Array(9).fill(false)),
+    undoStack: [],
+    redoStack: [],
     selected: null,
     highlightConflicts: true,
+    notesMode: false,
+    elapsedSeconds: 0,
+    timerId: null,
+    timerPaused: false,
     isSolved: false,
     isBusy: false,
 };
@@ -151,18 +191,131 @@ function updateDifficultyLabel() {
     localStorage.setItem("difficulty", String(val));
 }
 
+function updateTimerDisplay() {
+    const el = document.getElementById("timerDisplay");
+    if (el) el.textContent = formatTime(state.elapsedSeconds);
+}
+
+function startTimer() {
+    if (state.timerId !== null || state.isSolved || state.timerPaused) return;
+    state.timerId = setInterval(() => {
+        state.elapsedSeconds += 1;
+        updateTimerDisplay();
+    }, 1000);
+}
+
+function stopTimer() {
+    if (state.timerId !== null) {
+        clearInterval(state.timerId);
+        state.timerId = null;
+    }
+}
+
+function resetTimer({ autoStart = false } = {}) {
+    stopTimer();
+    state.elapsedSeconds = 0;
+    state.timerPaused = false;
+    updatePauseUI();
+    updateTimerDisplay();
+    if (autoStart) startTimer();
+}
+
+function updatePauseUI() {
+    const boardEl = document.getElementById("sudokuBoard");
+    const overlay = document.getElementById("pauseOverlay");
+    const pauseBtn = document.getElementById("pauseBtn");
+    if (boardEl) boardEl.classList.toggle("paused", state.timerPaused);
+    if (overlay) overlay.classList.toggle("hidden", !state.timerPaused);
+    if (pauseBtn) pauseBtn.textContent = state.timerPaused ? "Resume" : "Pause";
+}
+
+function togglePause() {
+    if (state.isSolved || state.isBusy) return;
+    if (state.timerPaused) {
+        state.timerPaused = false;
+        updatePauseUI();
+        startTimer();
+    } else {
+        state.timerPaused = true;
+        stopTimer();
+        updatePauseUI();
+    }
+    updateButtonStates();
+}
+
+function updateNotesButton() {
+    const btn = document.getElementById("notesBtn");
+    if (!btn) return;
+    btn.textContent = state.notesMode ? "Notes: ON" : "Notes: OFF";
+    btn.setAttribute("aria-pressed", String(state.notesMode));
+    btn.classList.toggle("btn-active", state.notesMode);
+}
+
+function snapshotState() {
+    return {
+        board: cloneGrid(state.board),
+        notes: cloneNotes(state.notes),
+        solverFilled: cloneGrid(state.solverFilled),
+    };
+}
+
+function pushHistory() {
+    state.undoStack.push(snapshotState());
+    if (state.undoStack.length > 200) {
+        state.undoStack.shift();
+    }
+    state.redoStack = [];
+}
+
+function clearHistory() {
+    state.undoStack = [];
+    state.redoStack = [];
+}
+
+function handleUndo() {
+    if (!state.undoStack.length || state.isBusy || state.isSolved || state.timerPaused) return;
+    state.redoStack.push(snapshotState());
+    const prev = state.undoStack.pop();
+    state.board = prev.board;
+    state.notes = prev.notes;
+    state.solverFilled = prev.solverFilled;
+    clearStatus();
+    renderBoard();
+}
+
+function handleRedo() {
+    if (!state.redoStack.length || state.isBusy || state.isSolved || state.timerPaused) return;
+    state.undoStack.push(snapshotState());
+    const next = state.redoStack.pop();
+    state.board = next.board;
+    state.notes = next.notes;
+    state.solverFilled = next.solverFilled;
+    clearStatus();
+    renderBoard();
+}
+
 function updateButtonStates() {
     const checkBtn = document.getElementById("checkSolution");
     const clearBtn = document.getElementById("clearInput");
     const solveBtn = document.getElementById("solveBtn");
     const genBtn = document.getElementById("generateProblem");
     const resetBtn = document.getElementById("resetAll");
+    const undoBtn = document.getElementById("undoBtn");
+    const redoBtn = document.getElementById("redoBtn");
+    const notesBtn = document.getElementById("notesBtn");
+    const pauseBtn = document.getElementById("pauseBtn");
 
-    if (checkBtn) checkBtn.disabled = state.isBusy || state.isSolved;
-    if (clearBtn) clearBtn.disabled = state.isBusy || state.isSolved;
-    if (solveBtn) solveBtn.disabled = state.isBusy || state.isSolved;
+    const locked = state.isBusy || state.isSolved || state.timerPaused;
+    if (checkBtn) checkBtn.disabled = locked;
+    if (clearBtn) clearBtn.disabled = locked;
+    if (solveBtn) solveBtn.disabled = locked;
     if (genBtn) genBtn.disabled = state.isBusy;
     if (resetBtn) resetBtn.disabled = state.isBusy;
+    if (undoBtn) undoBtn.disabled = locked || state.undoStack.length === 0;
+    if (redoBtn) redoBtn.disabled = locked || state.redoStack.length === 0;
+    if (notesBtn) notesBtn.disabled = locked;
+    if (pauseBtn) pauseBtn.disabled = state.isBusy || state.isSolved;
+    updateNotesButton();
 }
 
 function setBusy(busy) {
@@ -170,20 +323,88 @@ function setBusy(busy) {
     updateButtonStates();
 }
 
-function setCellValue(row, col, rawVal) {
-    if (state.prefilled[row][col] || state.isSolved || state.isBusy) return;
+function renderCellNotes(cell, row, col) {
+    const existing = cell.querySelector(".notes-grid");
+    if (existing) existing.remove();
+
+    if (state.board[row][col] !== "") return;
+    const cellNotes = state.notes[row][col];
+    if (!cellNotes || cellNotes.size === 0) return;
+
+    const n = state.allowedValues.length;
+    const cols = Math.ceil(Math.sqrt(n));
+    const grid = document.createElement("div");
+    grid.className = "notes-grid";
+    grid.style.setProperty("--notes-cols", String(cols));
+
+    for (const sym of state.allowedValues) {
+        const span = document.createElement("span");
+        span.className = "note-item";
+        if (cellNotes.has(sym)) {
+            span.classList.add("active");
+            span.textContent = sym;
+        }
+        grid.appendChild(span);
+    }
+    cell.appendChild(grid);
+}
+
+function setCellValue(row, col, rawVal, { forceValue = false } = {}) {
+    if (state.prefilled[row][col] || state.isSolved || state.isBusy || state.timerPaused) {
+        return;
+    }
     const norm = normalizeCellSymbol(rawVal, state.allowedValues);
+
+    if (state.notesMode && !forceValue) {
+        if (state.board[row][col] !== "") {
+            // In notes mode, erasing clears the value; otherwise ignore on filled cell
+            if (norm === "") {
+                pushHistory();
+                state.board[row][col] = "";
+                state.solverFilled[row][col] = false;
+                startTimer();
+                clearStatus();
+                renderBoard();
+            }
+            return;
+        }
+        pushHistory();
+        if (norm === "") {
+            state.notes[row][col].clear();
+        } else if (state.notes[row][col].has(norm)) {
+            state.notes[row][col].delete(norm);
+        } else {
+            state.notes[row][col].add(norm);
+        }
+        startTimer();
+        clearStatus();
+        const cell = document.querySelector(
+            `#sudokuBoard .cell[data-row="${row}"][data-col="${col}"]`
+        );
+        if (cell) renderCellNotes(cell, row, col);
+        updateButtonStates();
+        return;
+    }
+
+    if (state.board[row][col] === norm && (norm !== "" || state.notes[row][col].size === 0)) {
+        const input = document.querySelector(`#sudokuBoard input[name="cell${row}${col}"]`);
+        if (input) input.value = norm;
+        return;
+    }
+
+    pushHistory();
     state.board[row][col] = norm;
     state.solverFilled[row][col] = false;
+    if (norm !== "") {
+        clearPeerNotes(state.notes, row, col, norm, state.blockDim);
+    } else {
+        state.notes[row][col].clear();
+    }
 
-    const input = document.querySelector(`#sudokuBoard input[name="cell${row}${col}"]`);
-    if (input) input.value = norm;
-    const cell = input ? input.parentElement : null;
-    if (cell) cell.classList.remove("solver-filled");
-
+    startTimer();
     clearStatus();
-    refreshHighlights();
-    renderSymbolPad();
+    renderBoard();
+    focusCell(row, col);
 }
 
 function focusCell(row, col) {
@@ -235,7 +456,7 @@ function renderSymbolPad() {
         btn.className = "pad-btn";
         const rem = remaining[sym];
         if (rem <= 0) btn.classList.add("completed");
-        btn.disabled = state.isBusy || state.isSolved;
+        btn.disabled = state.isBusy || state.isSolved || state.timerPaused;
 
         const symSpan = document.createElement("span");
         symSpan.textContent = sym;
@@ -256,7 +477,7 @@ function renderSymbolPad() {
     eraseBtn.type = "button";
     eraseBtn.className = "pad-btn erase-btn";
     eraseBtn.textContent = "Erase";
-    eraseBtn.disabled = state.isBusy || state.isSolved;
+    eraseBtn.disabled = state.isBusy || state.isSolved || state.timerPaused;
     eraseBtn.addEventListener("click", () => {
         if (!state.selected) return;
         setCellValue(state.selected.row, state.selected.col, "");
@@ -350,6 +571,7 @@ function renderBoard() {
             });
 
             cell.appendChild(input);
+            renderCellNotes(cell, r, c);
             boardEl.appendChild(cell);
         }
     }
@@ -369,10 +591,13 @@ function applyBoardConfig(sizeKey, allowedValues, blockDim) {
     state.allowedValues = [...allowedValues];
     state.blockDim = [...blockDim];
     state.board = createEmptyGrid(n);
+    state.notes = createEmptyNotes(n);
     state.prefilled = Array.from({ length: n }, () => Array(n).fill(false));
     state.solverFilled = Array.from({ length: n }, () => Array(n).fill(false));
+    clearHistory();
     state.selected = null;
     state.isSolved = false;
+    resetTimer({ autoStart: false });
     clearStatus();
     renderBoard();
 }
@@ -380,8 +605,10 @@ function applyBoardConfig(sizeKey, allowedValues, blockDim) {
 function loadBoardData(problem, { markPrefilled = true, markSolved = false } = {}) {
     const n = state.allowedValues.length;
     state.board = createEmptyGrid(n);
+    state.notes = createEmptyNotes(n);
     state.prefilled = Array.from({ length: n }, () => Array(n).fill(false));
     state.solverFilled = Array.from({ length: n }, () => Array(n).fill(false));
+    clearHistory();
     state.isSolved = markSolved;
 
     for (let r = 0; r < n; r++) {
@@ -393,6 +620,7 @@ function loadBoardData(problem, { markPrefilled = true, markSolved = false } = {
             }
         }
     }
+    resetTimer({ autoStart: markPrefilled && !markSolved });
     renderBoard();
 }
 
@@ -463,7 +691,9 @@ async function handleSolve() {
                 }
             }
         }
+        state.notes = createEmptyNotes(n);
         state.isSolved = true;
+        stopTimer();
         renderBoard();
         setStatus(
             `Solved in ${data.steps} step${data.steps === 1 ? "" : "s"} (${data.elapsed_ms} ms).`,
@@ -486,7 +716,11 @@ async function handleCheckSolution() {
         });
         const data = await response.json();
         if (data.solved) {
-            setStatus("Congratulations! The Sudoku is solved!", "success");
+            stopTimer();
+            setStatus(
+                `Congratulations! Solved in ${formatTime(state.elapsedSeconds)}!`,
+                "success"
+            );
         } else {
             setStatus("Oops! The Sudoku is not solved yet.", "error");
         }
@@ -498,6 +732,7 @@ async function handleCheckSolution() {
 }
 
 function handleClearUserInputs() {
+    pushHistory();
     const n = state.allowedValues.length;
     for (let r = 0; r < n; r++) {
         for (let c = 0; c < n; c++) {
@@ -505,6 +740,7 @@ function handleClearUserInputs() {
                 state.board[r][c] = "";
                 state.solverFilled[r][c] = false;
             }
+            state.notes[r][c].clear();
         }
     }
     state.isSolved = false;
@@ -656,6 +892,30 @@ if (typeof document !== "undefined") {
             refreshHighlights();
         });
 
+        document.getElementById("notesBtn").addEventListener("click", () => {
+            state.notesMode = !state.notesMode;
+            updateNotesButton();
+        });
+        document.getElementById("undoBtn").addEventListener("click", handleUndo);
+        document.getElementById("redoBtn").addEventListener("click", handleRedo);
+        document.getElementById("pauseBtn").addEventListener("click", togglePause);
+        document.getElementById("resumeOverlayBtn").addEventListener("click", togglePause);
+
+        document.addEventListener("keydown", evt => {
+            const mod = evt.ctrlKey || evt.metaKey;
+            if (mod && evt.key.toLowerCase() === "z") {
+                evt.preventDefault();
+                if (evt.shiftKey) {
+                    handleRedo();
+                } else {
+                    handleUndo();
+                }
+            } else if (mod && evt.key.toLowerCase() === "y") {
+                evt.preventDefault();
+                handleRedo();
+            }
+        });
+
         document.getElementById("generateProblem").addEventListener("click", handleGenerate);
         document.getElementById("solveBtn").addEventListener("click", handleSolve);
         document.getElementById("checkSolution").addEventListener("click", handleCheckSolution);
@@ -673,6 +933,11 @@ if (typeof module !== "undefined" && module.exports) {
         parseCustomSymbols,
         normalizeCellSymbol,
         createEmptyGrid,
+        createEmptyNotes,
+        cloneGrid,
+        cloneNotes,
+        clearPeerNotes,
+        formatTime,
         isSamePeer,
         findConflicts,
         countRemainingSymbols,

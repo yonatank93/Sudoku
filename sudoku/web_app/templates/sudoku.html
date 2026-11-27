@@ -78,14 +78,37 @@
 
         <main class="board-stage">
             <div class="board-toolbar" aria-label="Board options">
+                <div class="toolbar-group">
+                    <span id="timerDisplay" class="timer-pill" aria-label="Elapsed time">00:00</span>
+                    <button type="button" id="pauseBtn" class="btn btn-sm btn-ghost">Pause</button>
+                </div>
+
+                <div class="toolbar-group">
+                    <button type="button" id="notesBtn" class="btn btn-sm btn-ghost" aria-pressed="false">
+                        Notes: OFF
+                    </button>
+                    <button type="button" id="undoBtn" class="btn btn-sm btn-ghost" title="Undo (Ctrl+Z)" disabled>
+                        Undo
+                    </button>
+                    <button type="button" id="redoBtn" class="btn btn-sm btn-ghost" title="Redo (Ctrl+Y)" disabled>
+                        Redo
+                    </button>
+                </div>
+
                 <label class="toggle-chip">
                     <input type="checkbox" id="conflictToggle" checked>
-                    <span>Highlight Conflicts</span>
+                    <span>Conflicts</span>
                 </label>
             </div>
 
             <div id="boardContainer" class="board-container">
-                <div id="sudokuBoard" class="sudoku-board" role="grid" aria-label="Sudoku board"></div>
+                <div class="board-wrapper">
+                    <div id="sudokuBoard" class="sudoku-board" role="grid" aria-label="Sudoku board"></div>
+                    <div id="pauseOverlay" class="pause-overlay hidden">
+                        <span>Paused</span>
+                        <button type="button" id="resumeOverlayBtn" class="btn btn-primary btn-sm">Resume</button>
+                    </div>
+                </div>
             </div>
 
             <div id="symbolPad" class="symbol-pad" aria-label="Symbol pad"></div>

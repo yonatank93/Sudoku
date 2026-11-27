@@ -305,9 +305,87 @@ input[type="range"] {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    justify-content: center;
-    gap: 12px;
+    justify-content: space-between;
+    gap: 10px;
     width: 100%;
+    max-width: 560px;
+}
+
+.toolbar-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.timer-pill {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.92rem;
+    font-weight: 700;
+    padding: 5px 10px;
+    border-radius: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+}
+
+.btn-sm {
+    padding: 5px 10px;
+    font-size: 0.82rem;
+}
+
+.btn-active {
+    background: var(--primary) !important;
+    color: #ffffff !important;
+    border-color: var(--primary) !important;
+}
+
+.board-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+.sudoku-board.paused {
+    filter: blur(8px);
+    pointer-events: none;
+    user-select: none;
+}
+
+.pause-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    background: rgba(15, 23, 42, 0.35);
+    border-radius: 6px;
+    color: #ffffff;
+    font-size: 1.4rem;
+    font-weight: 700;
+    z-index: 3;
+}
+
+.notes-grid {
+    position: absolute;
+    inset: 2px;
+    display: grid;
+    grid-template-columns: repeat(var(--notes-cols, 3), 1fr);
+    align-items: center;
+    justify-items: center;
+    pointer-events: none;
+    font-size: calc(var(--cell-size) * 0.22);
+    line-height: 1;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.note-item {
+    opacity: 0;
+}
+
+.note-item.active {
+    opacity: 1;
 }
 
 .toggle-chip {
