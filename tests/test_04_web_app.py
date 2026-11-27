@@ -1,10 +1,14 @@
 import importlib
+import importlib.util
 import json
+import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import types
 import unittest
+import zipfile
 from pathlib import Path
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
@@ -455,6 +459,66 @@ class TestWebAppFrontendJS(unittest.TestCase):
             check=False,
         )
         self.assertEqual(res.returncode, 0, res.stderr)
+
+
+@unittest.skipUnless(HAS_JINJA2, "jinja2 is not installed")
+class TestGitHubPagesBuild(unittest.TestCase):
+    """Verify the static GitHub Pages Pyodide bundle builds and runs standalone."""
+
+    def test_build_site_and_standalone_zip_bundle(self):
+        script_path = (
+            Path(__file__).resolve().parent.parent / "scripts" / "build_gh_pages.py"
+        )
+        spec = importlib.util.spec_from_file_location("build_gh_pages", script_path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_dir = Path(tmpdir) / "site"
+            mod.build_site(out_dir)
+
+            for fname in (
+                "index.html",
+                ".nojekyll",
+                "style.css",
+                "app.js",
+                "pyodide_worker.js",
+                "sudoku_pkg.zip",
+            ):
+                self.assertTrue((out_dir / fname).is_file(), f"Missing {fname}")
+
+            html = (out_dir / "index.html").read_text(encoding="utf-8")
+            self.assertIn('data-mode="pyodide"', html)
+            self.assertIn('href="./style.css"', html)
+            self.assertIn('src="./app.js"', html)
+
+            # Extract sudoku_pkg.zip into a clean directory and run engine standalone
+            extract_dir = Path(tmpdir) / "unpacked"
+            with zipfile.ZipFile(out_dir / "sudoku_pkg.zip", "r") as zf:
+                names = set(zf.namelist())
+                self.assertIn("sudoku/web_app/engine.py", names)
+                self.assertNotIn("sudoku/web_app/app.py", names)
+                zf.extractall(extract_dir)
+
+            env = dict(os.environ)
+            env["PYTHONPATH"] = str(extract_dir)
+            probe = (
+                "from sudoku.web_app import engine; "
+                "g = engine.generate_payload(level=2, size='4x4'); "
+                "s = engine.solve_payload(g); "
+                "st = engine.solve_steps_payload(g); "
+                "c = engine.check_solution_payload({'problem': s['solution'], 'size': '4x4'}); "
+                "assert c['solved'] and st['solution'] == s['solution']"
+            )
+            res = subprocess.run(
+                [sys.executable, "-c", probe],
+                cwd=str(extract_dir),
+                env=env,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(res.returncode, 0, res.stderr)
 
 
 @unittest.skipUnless(HAS_FLASK, "flask is not installed")
