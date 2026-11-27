@@ -5,34 +5,26 @@ from .sudoku import Sudoku
 from .generate_problem import generate_problem as gen_prob
 
 
-def solve(argv=None):
-    arg_parser = argparse.ArgumentParser(
-        description="Sudoku solver command line tool"
-    )
-    arg_parser.add_argument(
-        "-s",
-        "--show-init",
-        dest="show_init",
-        action="store_true",
-        help="Show initial, unsolved  board",
-    )
-    arg_parser.add_argument(
-        "-v",
-        "--verbose",
-        dest="verbose",
-        action="store_true",
-        help="Show the steps of the solving process",
-    )
-    args = arg_parser.parse_args(argv)
-
+def _prompt_board_config():
+    """Interactively prompt and validate allowed_values and block_dim."""
     # Allowed values input
-    allowed_values = input(
-        "Input allowed values as a continuous string (default: '123456789'): "
-    )
-    if allowed_values == "":
-        allowed_values = "123456789"
+    while True:
+        allowed_values = input(
+            "Input allowed values as a continuous string (default: '123456789'): "
+        )
+        if allowed_values == "":
+            allowed_values = "123456789"
+        if len(allowed_values) < 2:
+            print("Invalid input: Please provide at least 2 allowed values.")
+            print("Please try again.")
+            continue
+        if len(allowed_values) != len(set(allowed_values)):
+            print("Invalid input: Allowed values must not contain duplicates.")
+            print("Please try again.")
+            continue
+        break
 
-    # Block dimention input
+    # Block dimension input
     while True:
         try:
             block_dim_input = input(
@@ -44,8 +36,10 @@ def solve(argv=None):
             block_dim = tuple(int(x) for x in block_dim_input.split())
 
             # Checks
-            if len(block_dim) != 2:
-                raise ValueError("Block dimension should be two integers.")
+            if len(block_dim) != 2 or block_dim[0] <= 0 or block_dim[1] <= 0:
+                raise ValueError(
+                    "Block dimension should be two positive integers."
+                )
             if block_dim[0] * block_dim[1] != len(allowed_values):
                 raise ValueError(
                     "Product of block dimensions should equal "
@@ -56,18 +50,55 @@ def solve(argv=None):
             print(f"Invalid input: {ve}")
             print("Please try again.")
 
+    return allowed_values, block_dim
+
+
+def solve(argv=None):
+    arg_parser = argparse.ArgumentParser(
+        description="Sudoku solver command line tool"
+    )
+    arg_parser.add_argument(
+        "-s",
+        "--show-init",
+        dest="show_init",
+        action="store_true",
+        help="Show initial, unsolved board",
+    )
+    arg_parser.add_argument(
+        "-v",
+        "--verbose",
+        dest="verbose",
+        action="store_true",
+        help="Show the steps of the solving process",
+    )
+    args = arg_parser.parse_args(argv)
+
+    allowed_values, block_dim = _prompt_board_config()
+
     # Board input
     board_input = UserInput(allowed_values=allowed_values)
-    board = Sudoku(
-        board_input.board, allowed_values=allowed_values, block_dim=block_dim
-    )
+    try:
+        board = Sudoku(
+            board_input.board,
+            allowed_values=allowed_values,
+            block_dim=block_dim,
+        )
+    except AssertionError as err:
+        print(f"Error: {err}")
+        return
+
     if args.show_init:
         print()
         print("Problem:")
         board.display()
         print()
 
-    board.solve(verbose=args.verbose)
+    try:
+        board.solve(verbose=args.verbose)
+    except ValueError as err:
+        print(f"Error: {err}")
+        return
+
     print("Solution:")
     board.display()
 
@@ -92,37 +123,7 @@ def generate_problem(argv=None):
     )
     args = arg_parser.parse_args(argv)
 
-    # Ask for input arguments
-    # Allowed values input
-    allowed_values = input(
-        "Input allowed values as a continuous string (default: '123456789'): "
-    )
-    if allowed_values == "":
-        allowed_values = "123456789"
-
-    # Block dimention input
-    while True:
-        try:
-            block_dim_input = input(
-                "Input block dimension as two integers separated by a space "
-                "(default: '3 3'): "
-            )
-            if block_dim_input == "":
-                block_dim_input = "3 3"
-            block_dim = tuple(int(x) for x in block_dim_input.split())
-
-            # Checks
-            if len(block_dim) != 2:
-                raise ValueError("Block dimension should be two integers.")
-            if block_dim[0] * block_dim[1] != len(allowed_values):
-                raise ValueError(
-                    "Product of block dimensions should equal "
-                    "the number of allowed values."
-                )
-            break
-        except ValueError as ve:
-            print(f"Invalid input: {ve}")
-            print("Please try again.")
+    allowed_values, block_dim = _prompt_board_config()
 
     # Problem level input
     while True:

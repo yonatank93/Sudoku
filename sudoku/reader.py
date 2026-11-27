@@ -30,6 +30,10 @@ class UserInput:
     def __init__(self, allowed_values="123456789"):
         self.allowed_values = allowed_values
         self._nallowed = len(allowed_values)
+        # Do not treat any allowed symbol (e.g., "0" in hex Sudoku) as empty
+        self.empty_char = [
+            ch for ch in self.empty_char if ch not in allowed_values
+        ] or [" "]
         print("Input each row of the board below:")
         self.board = []
         for ii in range(self._nallowed):
@@ -76,7 +80,7 @@ class UserInput:
                 raise AssertionError
 
     def check_length(self, line):
-        """Each line should contain 9 characters for a standard sudoku."""
+        """Each line should contain self._nallowed characters."""
         if len(line) != self._nallowed:
             print(
                 "Please input this row again, "
