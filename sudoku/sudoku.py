@@ -131,7 +131,12 @@ class Sudoku:
         # Check if the values in the given board are valid
         unique_board_values = list(
             set(
-                [el for row in board for el in row if el not in empty_cell_repr]
+                [
+                    el
+                    for row in board
+                    for el in row
+                    if el not in empty_cell_repr or el in self.allowed_values
+                ]
             )
         )
         values_not_allowed = [
@@ -176,7 +181,9 @@ class Sudoku:
         for groups in groups_collection:
             for ii, group in enumerate(groups):
                 nonzero_vals = [
-                    val for val in group.values if val not in empty_cell_repr
+                    val
+                    for val in group.values
+                    if val not in empty_cell_repr or val in self.allowed_values
                 ]
                 assert len(nonzero_vals) == len(
                     set(nonzero_vals)
@@ -193,7 +200,9 @@ class Sudoku:
             try:
                 for group in (cell.row, cell.column, cell.block):
                     nonzero_vals = [
-                        v for v in group.values if v not in empty_cell_repr
+                        v
+                        for v in group.values
+                        if v not in empty_cell_repr or v in self.allowed_values
                     ]
                     assert len(nonzero_vals) == len(
                         set(nonzero_vals)
@@ -285,6 +294,11 @@ class Sudoku:
             self._rebuild_cell_cache()
         return self._cells_cache
 
+    @property
+    def empty_cells(self) -> List[Cell]:
+        """List all the empty cells in the board."""
+        return self._get_empty_cells(fmt="list")
+
     def _get_empty_cells(self, fmt="list") -> Sequence[Cell]:
         """List all the empty cells."""
         if fmt == "list":
@@ -316,9 +330,9 @@ class Sudoku:
 
     def solve(
         self,
-        return_board: bool = True,
         callback: Callable = default_callback,
         verbose: bool = False,
+        return_board: bool = True,
     ):
         """Main method to solve the Sudoku problem."""
 
@@ -577,7 +591,7 @@ class Sudoku:
             row_val = []
             for val in row:
                 # For the empty cell, we just print empty spaces
-                if val == 0:
+                if val in empty_cell_repr and val not in self.allowed_values:
                     val = " "
                 if len(str(val)) < max_char_len:
                     row_val.append(

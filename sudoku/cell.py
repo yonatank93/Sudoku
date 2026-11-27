@@ -57,7 +57,10 @@ class Cell:
     @property
     def is_empty(self) -> bool:
         """Check if the cell is empty, i.e., has no value."""
-        return self.value in empty_cell_repr
+        return (
+            self.value in empty_cell_repr
+            and self.value not in self.allowed_values
+        )
 
     @property
     def possible_values(self) -> Sequence[int]:
