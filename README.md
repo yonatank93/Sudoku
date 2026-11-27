@@ -110,6 +110,20 @@ Options for `sudoku-play`:
 * `--port`: port to listen on (default: `5000`)
 * `--debug` / `--no-debug`: enable or disable Flask debug mode (default: enabled)
 
+#### GitHub Pages (In-Browser via Pyodide)
+
+The web app can also be hosted statically on GitHub Pages (e.g. `https://yonatank93.github.io/Sudoku/`) by running the exact same Python solver inside the browser via [Pyodide](https://pyodide.org/) in a Web Worker.
+
+* **Automatic deployment:** Pushing to `main` triggers `.github/workflows/deploy-pages.yml` to build and deploy the static bundle automatically (enable once in **Settings → Pages → Source: GitHub Actions**).
+* **Local preview of the static build:**
+
+```bash
+$ python3 scripts/build_gh_pages.py --out-dir site
+$ python3 -m http.server -d site 8000
+```
+
+Then open `http://127.0.0.1:8000/` in your browser.
+
 
 ## Tests
 
