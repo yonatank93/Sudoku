@@ -284,6 +284,8 @@ def _get_ncells_to_remove(
         # lower bound. In this case, we just set the number of cells to remove
         # to be the smaller value.
         nremove = min([lb, ub])
+    # Ensure at least one empty cell and at least one filled cell remain
+    nremove = max(1, min(ncells - 1, nremove))
     return nremove
 
 
@@ -316,27 +318,33 @@ def generate_problem(
     seed: int, optional
         Random seed for generating the board.
     verbose: bool, optional
-        Whether to print progress messages. The default is True.
+        Whether to print progress messages. The default is False.
     return_solution: bool, optional
         Whether to return the generated solution along with the problem.
 
     Returns
     -------
-    np.ndarray
-        A generated Sudoku problem board.
+    list or tuple of list
+        A generated Sudoku problem board, or ``(problem, solution)`` when
+        ``return_solution=True``.
     """
-    assert isinstance(
-        level, int
+    assert isinstance(level, (int, np.integer)) and not isinstance(
+        level, bool
     ), "Difficulty level can only be an integer number"
     assert 1 <= level <= 5, "Difficulty level ranges from 1 to 5 only"
-    # We allow allowed_values to be a string, but we need to convert it to a
-    # list
-    if isinstance(allowed_values, str):
-        allowed_values = [val for val in allowed_values]
-    elif isinstance(allowed_values, set):
-        allowed_values = list(allowed_values)
-    elif isinstance(allowed_values, range):
-        allowed_values = list(allowed_values)
+    # Normalize allowed_values (e.g., str, set, range, tuple) to a new list
+    allowed_values = list(allowed_values)
+    assert len(allowed_values) > 1, "At least 2 allowed values are required."
+    assert len(allowed_values) == len(
+        set(allowed_values)
+    ), "The allowed values should not contain duplicates."
+    assert (
+        len(block_dim) == 2 and block_dim[0] > 0 and block_dim[1] > 0
+    ), "Block dimension should be two positive integers."
+    assert block_dim[0] * block_dim[1] == len(allowed_values), (
+        "The dimension of block is incorrect. "
+        "The product of the dimensions must equal to the number of allowed values."
+    )
 
     rng = random.Random(seed) if seed is not None else random
 
@@ -359,4 +367,4 @@ def generate_problem(
 
 
 if __name__ == "__main__":
-    problem, solution = generate_problem(level=3)
+    problem, solution = generate_problem(level=3, return_solution=True)
