@@ -78,6 +78,68 @@ function formatTime(totalSeconds) {
     return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
+function serializeBoardToText(board, allowedValues) {
+    const emptyChar = allowedValues.includes("0") ? "_" : "0";
+    const multiChar = allowedValues.some(v => v.length > 1);
+    const sep = multiChar ? " " : "";
+    return board
+        .map(row => row.map(v => (v === "" ? emptyChar : v)).join(sep))
+        .join("\n");
+}
+
+function parseBoardFromText(text, allowedValues) {
+    const n = allowedValues.length;
+    const lines = String(text || "")
+        .split(/\r?\n/)
+        .map(l => l.trim())
+        .filter(Boolean);
+
+    if (lines.length !== n) {
+        throw new Error(`Expected ${n} non-empty rows, got ${lines.length}.`);
+    }
+
+    const emptyTokens = new Set(["_", "-", "."]);
+    if (!allowedValues.includes("0")) {
+        emptyTokens.add("0");
+    }
+    const multiChar = allowedValues.some(v => v.length > 1);
+    const board = [];
+
+    for (let r = 0; r < n; r++) {
+        const line = lines[r];
+        let tokens;
+        if (multiChar || line.includes(" ") || line.includes(",")) {
+            tokens = line.split(/[\s,]+/).filter(Boolean);
+        } else {
+            tokens = Array.from(line);
+        }
+
+        if (tokens.length !== n) {
+            throw new Error(
+                `Row ${r + 1} must have ${n} entries, got ${tokens.length}.`
+            );
+        }
+
+        const row = [];
+        for (let c = 0; c < n; c++) {
+            const tok = tokens[c];
+            if (emptyTokens.has(tok)) {
+                row.push("");
+            } else {
+                const norm = normalizeCellSymbol(tok, allowedValues);
+                if (!norm) {
+                    throw new Error(
+                        `Invalid symbol '${tok}' at row ${r + 1}, column ${c + 1}.`
+                    );
+                }
+                row.push(norm);
+            }
+        }
+        board.push(row);
+    }
+    return board;
+}
+
 function isSamePeer(r1, c1, r2, c2, blockDim) {
     if (r1 === r2 || c1 === c2) return true;
     const [bRows, bCols] = blockDim;
@@ -157,6 +219,10 @@ const state = {
     notes: createEmptyNotes(9),
     prefilled: Array.from({ length: 9 }, () => Array(9).fill(false)),
     solverFilled: Array.from({ length: 9 }, () => Array(9).fill(false)),
+    stepChanged: new Set(),
+    stepTrace: null,
+    stepIndex: 0,
+    animTimerId: null,
     undoStack: [],
     redoStack: [],
     selected: null,
@@ -274,6 +340,7 @@ function clearHistory() {
 
 function handleUndo() {
     if (!state.undoStack.length || state.isBusy || state.isSolved || state.timerPaused) return;
+    invalidateStepTrace();
     state.redoStack.push(snapshotState());
     const prev = state.undoStack.pop();
     state.board = prev.board;
@@ -285,6 +352,7 @@ function handleUndo() {
 
 function handleRedo() {
     if (!state.redoStack.length || state.isBusy || state.isSolved || state.timerPaused) return;
+    invalidateStepTrace();
     state.undoStack.push(snapshotState());
     const next = state.redoStack.pop();
     state.board = next.board;
@@ -292,6 +360,22 @@ function handleRedo() {
     state.solverFilled = next.solverFilled;
     clearStatus();
     renderBoard();
+}
+
+function stopAnimation() {
+    if (state.animTimerId !== null) {
+        clearInterval(state.animTimerId);
+        state.animTimerId = null;
+    }
+    const animBtn = document.getElementById("animateBtn");
+    if (animBtn) animBtn.textContent = "Watch Solve";
+}
+
+function invalidateStepTrace() {
+    stopAnimation();
+    state.stepTrace = null;
+    state.stepIndex = 0;
+    state.stepChanged = new Set();
 }
 
 function updateButtonStates() {
@@ -304,17 +388,22 @@ function updateButtonStates() {
     const redoBtn = document.getElementById("redoBtn");
     const notesBtn = document.getElementById("notesBtn");
     const pauseBtn = document.getElementById("pauseBtn");
+    const stepBtn = document.getElementById("stepBtn");
+    const animBtn = document.getElementById("animateBtn");
 
-    const locked = state.isBusy || state.isSolved || state.timerPaused;
+    const animating = state.animTimerId !== null;
+    const locked = state.isBusy || state.isSolved || state.timerPaused || animating;
     if (checkBtn) checkBtn.disabled = locked;
     if (clearBtn) clearBtn.disabled = locked;
     if (solveBtn) solveBtn.disabled = locked;
+    if (stepBtn) stepBtn.disabled = locked;
+    if (animBtn) animBtn.disabled = state.isBusy || state.isSolved || state.timerPaused;
     if (genBtn) genBtn.disabled = state.isBusy;
     if (resetBtn) resetBtn.disabled = state.isBusy;
     if (undoBtn) undoBtn.disabled = locked || state.undoStack.length === 0;
     if (redoBtn) redoBtn.disabled = locked || state.redoStack.length === 0;
     if (notesBtn) notesBtn.disabled = locked;
-    if (pauseBtn) pauseBtn.disabled = state.isBusy || state.isSolved;
+    if (pauseBtn) pauseBtn.disabled = state.isBusy || state.isSolved || animating;
     updateNotesButton();
 }
 
@@ -393,6 +482,7 @@ function setCellValue(row, col, rawVal, { forceValue = false } = {}) {
     }
 
     pushHistory();
+    invalidateStepTrace();
     state.board[row][col] = norm;
     state.solverFilled[row][col] = false;
     if (norm !== "") {
@@ -512,6 +602,7 @@ function renderBoard() {
 
             if (state.prefilled[r][c]) cell.classList.add("prefilled");
             if (state.solverFilled[r][c]) cell.classList.add("solver-filled");
+            if (state.stepChanged.has(`${r},${c}`)) cell.classList.add("step-changed");
 
             const input = document.createElement("input");
             input.type = "text";
@@ -586,6 +677,7 @@ function selectCell(row, col) {
 }
 
 function applyBoardConfig(sizeKey, allowedValues, blockDim) {
+    invalidateStepTrace();
     const n = allowedValues.length;
     state.sizeKey = sizeKey;
     state.allowedValues = [...allowedValues];
@@ -603,6 +695,7 @@ function applyBoardConfig(sizeKey, allowedValues, blockDim) {
 }
 
 function loadBoardData(problem, { markPrefilled = true, markSolved = false } = {}) {
+    invalidateStepTrace();
     const n = state.allowedValues.length;
     state.board = createEmptyGrid(n);
     state.notes = createEmptyNotes(n);
@@ -664,6 +757,7 @@ async function handleGenerate() {
 }
 
 async function handleSolve() {
+    invalidateStepTrace();
     setBusy(true);
     setStatus("Solving…");
     try {
@@ -733,6 +827,7 @@ async function handleCheckSolution() {
 
 function handleClearUserInputs() {
     pushHistory();
+    invalidateStepTrace();
     const n = state.allowedValues.length;
     for (let r = 0; r < n; r++) {
         for (let c = 0; c < n; c++) {
@@ -746,6 +841,141 @@ function handleClearUserInputs() {
     state.isSolved = false;
     clearStatus();
     renderBoard();
+}
+
+async function ensureStepTrace() {
+    if (state.stepTrace && state.stepIndex < state.stepTrace.length) {
+        return true;
+    }
+    setBusy(true);
+    setStatus("Computing solver steps…");
+    try {
+        const response = await fetch("/solve_steps", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(getPayload()),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || "Could not solve this board.");
+        }
+        state.stepTrace = data.steps;
+        state.stepIndex = 0;
+        if (data.total_steps === 0) {
+            state.isSolved = true;
+            stopTimer();
+            renderBoard();
+            setStatus("Board is already solved!", "success");
+            return false;
+        }
+        return true;
+    } catch (error) {
+        setStatus(error.message, "error");
+        return false;
+    } finally {
+        setBusy(false);
+    }
+}
+
+function applyNextStep() {
+    if (!state.stepTrace || state.stepIndex >= state.stepTrace.length) {
+        stopAnimation();
+        updateButtonStates();
+        return false;
+    }
+
+    const stepData = state.stepTrace[state.stepIndex];
+    state.stepIndex += 1;
+
+    const n = state.allowedValues.length;
+    state.notes = createEmptyNotes(n);
+    state.stepChanged = new Set(stepData.changed.map(([r, c]) => `${r},${c}`));
+
+    for (let r = 0; r < n; r++) {
+        for (let c = 0; c < n; c++) {
+            const val = normalizeCellSymbol(
+                stepData.board[r][c],
+                state.allowedValues
+            );
+            state.board[r][c] = val;
+            if (!state.prefilled[r][c] && val !== "") {
+                state.solverFilled[r][c] = true;
+            } else if (val === "") {
+                state.solverFilled[r][c] = false;
+            }
+        }
+    }
+
+    const total = state.stepTrace.length;
+    if (stepData.empty_count === 0) {
+        state.isSolved = true;
+        stopTimer();
+        stopAnimation();
+        renderBoard();
+        setStatus(`Solved in ${total} step${total === 1 ? "" : "s"}!`, "success");
+        return false;
+    }
+
+    renderBoard();
+    const note = stepData.reverted ? " (backtracking)" : "";
+    setStatus(
+        `Step ${stepData.step} / ${total}${note} — ${stepData.empty_count} empty cell${stepData.empty_count === 1 ? "" : "s"} left.`
+    );
+    return true;
+}
+
+async function handleStep() {
+    const ready = await ensureStepTrace();
+    if (!ready) return;
+    applyNextStep();
+}
+
+async function handleToggleAnimate() {
+    if (state.animTimerId !== null) {
+        stopAnimation();
+        updateButtonStates();
+        return;
+    }
+    const ready = await ensureStepTrace();
+    if (!ready) return;
+
+    const speedMs = parseInt(document.getElementById("animSpeed").value, 10) || 450;
+    const animBtn = document.getElementById("animateBtn");
+    if (animBtn) animBtn.textContent = "Stop";
+
+    if (!applyNextStep()) return;
+    state.animTimerId = setInterval(() => {
+        applyNextStep();
+    }, speedMs);
+    updateButtonStates();
+}
+
+function handleLoadPastedPuzzle() {
+    const textarea = document.getElementById("puzzleText");
+    if (!textarea) return;
+    try {
+        const parsed = parseBoardFromText(textarea.value, state.allowedValues);
+        loadBoardData(parsed, { markPrefilled: true, markSolved: false });
+        setStatus("Puzzle loaded.", "success");
+    } catch (error) {
+        setStatus(error.message, "error");
+    }
+}
+
+async function handleCopyBoard() {
+    const text = serializeBoardToText(state.board, state.allowedValues);
+    const textarea = document.getElementById("puzzleText");
+    if (textarea) textarea.value = text;
+    try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(text);
+            setStatus("Board copied to clipboard!", "success");
+            return;
+        }
+    } catch (_) {
+        // Fallback below
+    }
+    setStatus("Board text placed in the box above for copying.");
 }
 
 function handleResetAll() {
@@ -921,6 +1151,24 @@ if (typeof document !== "undefined") {
         document.getElementById("checkSolution").addEventListener("click", handleCheckSolution);
         document.getElementById("clearInput").addEventListener("click", handleClearUserInputs);
         document.getElementById("resetAll").addEventListener("click", handleResetAll);
+        document.getElementById("stepBtn").addEventListener("click", handleStep);
+        document.getElementById("animateBtn").addEventListener("click", handleToggleAnimate);
+
+        const ioPanel = document.getElementById("ioPanel");
+        document.getElementById("ioToggleBtn").addEventListener("click", () => {
+            ioPanel.classList.toggle("hidden");
+            if (!ioPanel.classList.contains("hidden")) {
+                const ta = document.getElementById("puzzleText");
+                if (ta && !ta.value.trim()) {
+                    ta.value = serializeBoardToText(state.board, state.allowedValues);
+                }
+            }
+        });
+        document.getElementById("closeIoBtn").addEventListener("click", () => {
+            ioPanel.classList.add("hidden");
+        });
+        document.getElementById("loadPuzzleBtn").addEventListener("click", handleLoadPastedPuzzle);
+        document.getElementById("copyBoardBtn").addEventListener("click", handleCopyBoard);
 
         hydrateInitialServerState();
     });
@@ -938,6 +1186,8 @@ if (typeof module !== "undefined" && module.exports) {
         cloneNotes,
         clearPeerNotes,
         formatTime,
+        serializeBoardToText,
+        parseBoardFromText,
         isSamePeer,
         findConflicts,
         countRemainingSymbols,

@@ -195,61 +195,6 @@ def solve_sudoku_steps(sudoku_problem, allowed_values, block_dim) -> dict:
     }
 
 
-def compute_hint(
-    sudoku_problem,
-    allowed_values,
-    block_dim,
-    row=None,
-    col=None,
-    mode: str = "cell",
-) -> dict:
-    """Return candidate values for a cell or reveal one valid cell value."""
-    norm = normalize_board(sudoku_problem, allowed_values)
-    board = Sudoku(norm, allowed_values=allowed_values, block_dim=block_dim)
-    n = len(allowed_values)
-
-    if row is not None or col is not None:
-        if row is None or col is None:
-            raise ValueError("Both 'row' and 'col' must be specified together.")
-        row, col = int(row), int(col)
-        if not (0 <= row < n and 0 <= col < n):
-            raise ValueError(f"Cell coordinates ({row}, {col}) are out of bounds.")
-
-    if mode == "candidates":
-        if row is None:
-            raise ValueError("Select a cell to inspect its possible values.")
-        cell = board.cells[row, col]
-        return {
-            "row": row,
-            "col": col,
-            "is_empty": cell.is_empty,
-            "possible_values": list(cell.possible_values),
-        }
-
-    if mode != "cell":
-        raise ValueError("Hint mode must be 'cell' or 'candidates'.")
-
-    if board.solved:
-        return {"already_solved": True}
-
-    empty_cells = board.empty_cells
-    if row is not None and board.cells[row, col].is_empty:
-        target_cell = board.cells[row, col]
-    else:
-        target_cell = min(empty_cells, key=lambda c: len(c.possible_values))
-        row, col = target_cell.row_idx, target_cell.column_idx
-
-    poss_before = list(target_cell.possible_values)
-    board.solve(verbose=False)
-    return {
-        "already_solved": False,
-        "row": row,
-        "col": col,
-        "value": board.board[row][col],
-        "possible_values": poss_before,
-    }
-
-
 def check_board_solved(problem, allowed_values=None, block_dim=None) -> bool:
     """Return True if problem is a valid, completely solved Sudoku board."""
     try:
@@ -388,25 +333,6 @@ def solve_steps_endpoint():
     try:
         problem, vals, dim = _extract_json_board_request(data)
         result = solve_sudoku_steps(problem, vals, dim)
-    except (AssertionError, ValueError, TypeError) as err:
-        return jsonify({"error": str(err)}), 400
-
-    return jsonify(result)
-
-
-@app.route("/hint", methods=["POST"])
-def hint_endpoint():
-    data = request.get_json(silent=True)
-    try:
-        problem, vals, dim = _extract_json_board_request(data)
-        result = compute_hint(
-            problem,
-            vals,
-            dim,
-            row=data.get("row"),
-            col=data.get("col"),
-            mode=data.get("mode", "cell"),
-        )
     except (AssertionError, ValueError, TypeError) as err:
         return jsonify({"error": str(err)}), 400
 

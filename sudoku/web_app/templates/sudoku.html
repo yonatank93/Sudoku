@@ -22,11 +22,26 @@
                 <p class="subtitle">Play, explore custom dimensions, or watch the solver work.</p>
             </div>
             <div class="header-actions">
+                <button type="button" id="ioToggleBtn" class="btn btn-ghost">
+                    Import / Export
+                </button>
                 <button type="button" id="themeToggle" class="btn btn-ghost" aria-label="Toggle dark mode">
                     Dark Mode
                 </button>
             </div>
         </header>
+
+        <section id="ioPanel" class="panel io-panel hidden" aria-label="Import or export puzzle">
+            <div class="control-group">
+                <label for="puzzleText">Puzzle Text (one row per line; use 0, _, -, or . for empty cells)</label>
+                <textarea id="puzzleText" rows="5" placeholder="Paste puzzle rows here or click Copy Board…"></textarea>
+            </div>
+            <div class="io-actions">
+                <button type="button" id="loadPuzzleBtn" class="btn btn-primary btn-sm">Load Puzzle</button>
+                <button type="button" id="copyBoardBtn" class="btn btn-secondary btn-sm">Copy Board</button>
+                <button type="button" id="closeIoBtn" class="btn btn-ghost btn-sm">Close</button>
+            </div>
+        </section>
 
         <section class="panel controls-panel" aria-label="Puzzle controls">
             <div class="control-row">
@@ -121,8 +136,18 @@
             <div class="action-bar">
                 <button type="button" id="checkSolution" class="btn btn-secondary">Check Solution</button>
                 <button type="button" id="clearInput" class="btn btn-ghost">Clear Input</button>
-                <button type="button" id="solveBtn" class="btn btn-accent">Solve</button>
                 <button type="button" id="resetAll" class="btn btn-danger">Reset All</button>
+            </div>
+
+            <div class="solver-bar" aria-label="Solver controls">
+                <button type="button" id="stepBtn" class="btn btn-secondary btn-sm">Next Step</button>
+                <button type="button" id="animateBtn" class="btn btn-accent btn-sm">Watch Solve</button>
+                <select id="animSpeed" aria-label="Animation speed">
+                    <option value="900">Slow</option>
+                    <option value="450" selected>Normal</option>
+                    <option value="150">Fast</option>
+                </select>
+                <button type="button" id="solveBtn" class="btn btn-accent btn-sm">Solve All</button>
             </div>
         </main>
     </div>

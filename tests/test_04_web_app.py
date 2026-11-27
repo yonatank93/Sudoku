@@ -1,5 +1,7 @@
 import importlib
 import json
+import shutil
+import subprocess
 import sys
 import types
 import unittest
@@ -9,6 +11,8 @@ DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 TEMPLATE_DIR = (
     Path(__file__).resolve().parent.parent / "sudoku" / "web_app" / "templates"
 )
+STATIC_DIR = Path(__file__).resolve().parent.parent / "sudoku" / "web_app" / "static"
+HAS_NODE = shutil.which("node") is not None
 
 try:
     import flask as _real_flask  # noqa: F401
@@ -244,7 +248,7 @@ class TestWebAppLogic(unittest.TestCase):
         self.assertEqual(status, 400)
         self.assertFalse(res["solved"])
 
-    def test_solve_solve_steps_and_hint_endpoints(self):
+    def test_solve_and_solve_steps_endpoints(self):
         req = self._stub.request
 
         # POST /solve (9x9 + 6x6 custom)
@@ -278,37 +282,6 @@ class TestWebAppLogic(unittest.TestCase):
         self.assertGreater(res_steps["total_steps"], 0)
         self.assertEqual(res_steps["steps"][-1]["empty_count"], 0)
 
-        # POST /hint (cell mode + candidates mode + already solved)
-        req._json = {"problem": self.b01["board"], "row": 2, "col": 2, "mode": "cell"}
-        res_hint = self.webapp.hint_endpoint()
-        self.assertFalse(res_hint["already_solved"])
-        self.assertEqual((res_hint["row"], res_hint["col"]), (2, 2))
-        self.assertEqual(res_hint["value"], self.b01["solution"][2][2])
-
-        req._json = {"problem": self.b01["board"], "mode": "cell"}
-        res_auto_hint = self.webapp.hint_endpoint()
-        r, c = res_auto_hint["row"], res_auto_hint["col"]
-        self.assertEqual(res_auto_hint["value"], self.b01["solution"][r][c])
-
-        req._json = {
-            "problem": self.b01["board"],
-            "row": 2,
-            "col": 2,
-            "mode": "candidates",
-        }
-        res_cand = self.webapp.hint_endpoint()
-        self.assertTrue(res_cand["is_empty"])
-        self.assertIn(self.b01["solution"][2][2], res_cand["possible_values"])
-
-        req._json = {"problem": self.b01["solution"], "mode": "cell"}
-        self.assertTrue(self.webapp.hint_endpoint()["already_solved"])
-
-        # Bad hint coordinates -> 400
-        req._json = {"problem": self.b01["board"], "row": 99, "col": 0, "mode": "cell"}
-        res_bad_hint, status = self.webapp.hint_endpoint()
-        self.assertEqual(status, 400)
-        self.assertIn("error", res_bad_hint)
-
 
 @unittest.skipUnless(HAS_JINJA2, "jinja2 is not installed")
 class TestWebAppTemplate(unittest.TestCase):
@@ -337,6 +310,11 @@ class TestWebAppTemplate(unittest.TestCase):
         self.assertIn('id="boardSize"', rendered)
         self.assertIn('id="themeToggle"', rendered)
         self.assertIn('id="sudokuBoard"', rendered)
+        self.assertNotIn('id="hintBtn"', rendered)
+        self.assertNotIn('id="candidatesBtn"', rendered)
+        self.assertIn('id="stepBtn"', rendered)
+        self.assertIn('id="animateBtn"', rendered)
+        self.assertIn('id="ioPanel"', rendered)
         self.assertIn('"is_solved": false', rendered)
 
     def test_template_error_post_embeds_board_and_error(self):
@@ -362,6 +340,79 @@ class TestWebAppTemplate(unittest.TestCase):
         )
         self.assertIn('data-initial-solved="true"', rendered)
         self.assertIn('"is_solved": true', rendered)
+
+
+@unittest.skipUnless(HAS_NODE, "node is not installed")
+class TestWebAppFrontendJS(unittest.TestCase):
+    """Syntax-check and unit-test pure frontend JS helpers via Node."""
+
+    def test_app_js_syntax(self):
+        app_js = STATIC_DIR / "app.js"
+        res = subprocess.run(
+            ["node", "--check", str(app_js)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(res.returncode, 0, res.stderr)
+
+    def test_app_js_pure_helpers(self):
+        app_js = str(STATIC_DIR / "app.js")
+        script = f"""
+        const assert = require("assert");
+        const app = require({json.dumps(app_js)});
+
+        assert.deepStrictEqual(app.parseCustomSymbols("123456"), ["1","2","3","4","5","6"]);
+        assert.deepStrictEqual(app.parseCustomSymbols("A, B, C, D"), ["A","B","C","D"]);
+        assert.strictEqual(app.normalizeCellSymbol("A", app.BOARD_PRESETS["16x16"].allowedValues), "a");
+        assert.strictEqual(app.normalizeCellSymbol("0", ["0","1","2","3"]), "0");
+        assert.strictEqual(app.formatTime(65), "01:05");
+
+        // Peer & conflicts
+        assert.strictEqual(app.isSamePeer(0, 0, 1, 2, [2, 3]), true);
+        assert.strictEqual(app.isSamePeer(0, 0, 1, 3, [2, 3]), false);
+        const dupBoard = [
+            ["1", "", "1", ""],
+            ["", "1", "", ""],
+            ["", "", "", "2"],
+            ["", "", "", "2"],
+        ];
+        const conf = app.findConflicts(dupBoard, [2, 2]);
+        assert.ok(conf.has("0,0") && conf.has("0,2") && conf.has("1,1") && conf.has("2,3") && conf.has("3,3"));
+        assert.deepStrictEqual(app.countRemainingSymbols(dupBoard, ["1","2","3","4"]), {{"1":1,"2":2,"3":4,"4":4}});
+
+        // Notes auto-cleanup
+        const notes = app.createEmptyNotes(4);
+        notes[0][0].add("1");
+        notes[0][3].add("1").add("2");
+        notes[2][2].add("1");
+        app.clearPeerNotes(notes, 0, 0, "1", [2, 2]);
+        assert.strictEqual(notes[0][0].size, 0);
+        assert.strictEqual(notes[0][3].has("1"), false);
+        assert.strictEqual(notes[0][3].has("2"), true);
+        assert.strictEqual(notes[2][2].has("1"), true);
+
+        // Import / Export serialization roundtrip (standard + '0'-allowed + multi-char)
+        const b4 = [["1","","3","4"],["3","4","1","2"],["2","1","4","3"],["4","3","2",""]];
+        const txt = app.serializeBoardToText(b4, ["1","2","3","4"]);
+        assert.strictEqual(txt, "1034\\n3412\\n2143\\n4320");
+        assert.deepStrictEqual(app.parseBoardFromText(txt, ["1","2","3","4"]), b4);
+
+        const bZero = [["0","","2","3"],["2","3","0","1"],["1","0","3","2"],["3","2","1",""]];
+        const txtZero = app.serializeBoardToText(bZero, ["0","1","2","3"]);
+        assert.strictEqual(txtZero.split("\\n")[0], "0_23");
+        assert.deepStrictEqual(app.parseBoardFromText(txtZero, ["0","1","2","3"]), bZero);
+
+        assert.throws(() => app.parseBoardFromText("1234\\n1234", ["1","2","3","4"]));
+        assert.throws(() => app.parseBoardFromText("123x\\n3412\\n2143\\n4321", ["1","2","3","4"]));
+        """
+        res = subprocess.run(
+            ["node", "-e", script],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(res.returncode, 0, res.stderr)
 
 
 @unittest.skipUnless(HAS_FLASK, "flask is not installed")
