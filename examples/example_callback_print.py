@@ -1,24 +1,33 @@
-"""In this script, I give an example on a basic callback function that prints
-how many empty tiles in each iteration.
+"""Example of a basic callback function that prints how many empty cells remain
+in each iteration.
 """
 
 import json
+from pathlib import Path
 
-from sudoku import Board
+from sudoku import Sudoku
 
 
 # Load the problem
-data = json.load(open("../data/board_11.json", "r"))
+data_path = (
+    Path(__file__).resolve().parent.parent / "data" / "9by9" / "board_11.json"
+)
+with open(data_path, "r") as f:
+    data = json.load(f)
 
-# Instantiate the board
-board = Board(data["board"])
+# Instantiate the Sudoku board
+board = Sudoku(
+    data["board"],
+    allowed_values=data["allowed_values"],
+    block_dim=data["block_dim"],
+)
 
 
 # Define a custom callback function
 def callback(board_inst):
-    """This callback function prints how many tiles are still empty."""
-    nempty_tile = len(board_inst.empty_tiles)
-    print("Iteration:", board_inst.niter, "Number of empty tiles:", nempty_tile)
+    """Print how many cells are still empty."""
+    nempty_cell = len(board_inst.empty_cells)
+    print("Iteration:", board_inst.niter, "Number of empty cells:", nempty_cell)
 
 
 # Solve the problem

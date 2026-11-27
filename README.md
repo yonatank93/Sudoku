@@ -1,13 +1,13 @@
 # Sudoku
 
-My take on creating a Sudoku solver with Python
+My take on creating a Sudoku solver with Python (supporting standard 9x9 boards as well as arbitrary board dimensions and custom symbols).
 
 
 ## Install
 
-Install this pacakge from the source:
+Install this package from source:
 
-``` bash
+```bash
 $ git clone https://github.com/yonatank93/Sudoku.git
 $ pip install Sudoku/
 ```
@@ -15,50 +15,48 @@ $ pip install Sudoku/
 
 ## Example
 
-``` Python
-In [1]: import json, sudoku
+### Solving a 9x9 Board
 
-In [2]: data = json.load(open("Sudoku/data/board_01.json", "r"))
+```python
+import json
+import sudoku
 
-In [3]: board = sudoku.Board(data["board"])
+with open("Sudoku/data/9by9/board_01.json", "r") as f:
+    data = json.load(f)
 
-In [4]: board.solve()
-Solving time: 0:00:00.018726
+board = sudoku.Sudoku(data["board"])
+board.solve(verbose=True)
+board.display()
+```
 
-In [5]: board.display()
-#####################################
-# 4 | 7 | 8 # 6 | 9 | 3 # 1 | 5 | 2 #
-#-----------#-----------#-----------#
-# 5 | 2 | 6 # 7 | 1 | 8 # 4 | 9 | 3 #
-#-----------#-----------#-----------#
-# 1 | 3 | 9 # 4 | 2 | 5 # 8 | 7 | 6 #
-#####################################
-# 3 | 8 | 5 # 1 | 4 | 7 # 6 | 2 | 9 #
-#-----------#-----------#-----------#
-# 7 | 4 | 2 # 9 | 8 | 6 # 5 | 3 | 1 #
-#-----------#-----------#-----------#
-# 6 | 9 | 1 # 5 | 3 | 2 # 7 | 4 | 8 #
-#####################################
-# 8 | 5 | 4 # 3 | 6 | 9 # 2 | 1 | 7 #
-#-----------#-----------#-----------#
-# 2 | 1 | 3 # 8 | 7 | 4 # 9 | 6 | 5 #
-#-----------#-----------#-----------#
-# 9 | 6 | 7 # 2 | 5 | 1 # 3 | 8 | 4 #
-#####################################
+### Custom Dimensions, Custom Symbols, and Puzzle Generation
 
-In [6]:
+```python
+import sudoku
+
+# Generate and solve a 6x6 puzzle with 2x3 blocks
+problem = sudoku.generate_problem(
+    level=3,
+    allowed_values=range(1, 7),
+    block_dim=(2, 3),
+    seed=42,
+)
+board = sudoku.Sudoku(problem, allowed_values=range(1, 7), block_dim=(2, 3))
+board.solve()
+board.display()
 ```
 
 
 ### Command-Line Interface
 
-A command-line interface allows users to input a Sudoku problem and solve it.
-Below is an example command to solve the same Sudoku problem as above.
-Each row of the Sudoku puzzle must be entered manually as a continuous string of nine digits, using "0" to denote empty tiles.
-No spaces or separators are needed between numbers in the same row.
+#### `sudoku-solve`
+
+Interactive CLI to input and solve a Sudoku problem of any dimension. Press Enter to accept the default 9x9 settings (`'123456789'` and `'3 3'`), then enter each row as a continuous string using `"0"`, `"_"`, or `"-"` for empty cells.
 
 ```bash
 $ sudoku-solve
+Input allowed values as a continuous string (default: '123456789'):
+Input block dimension as two integers separated by a space (default: '3 3'):
 Input each row of the board below:
 478693152
 526718493
@@ -69,28 +67,23 @@ Input each row of the board below:
 000369000
 003874900
 067251380
-Solving time: 0:00:00.016867
-Solution:
-#####################################
-# 4 | 7 | 8 # 6 | 9 | 3 # 1 | 5 | 2 #
-#-----------#-----------#-----------#
-# 5 | 2 | 6 # 7 | 1 | 8 # 4 | 9 | 3 #
-#-----------#-----------#-----------#
-# 1 | 3 | 9 # 4 | 2 | 5 # 8 | 7 | 6 #
-#####################################
-# 3 | 8 | 5 # 1 | 4 | 7 # 6 | 2 | 9 #
-#-----------#-----------#-----------#
-# 7 | 4 | 2 # 9 | 8 | 6 # 5 | 3 | 1 #
-#-----------#-----------#-----------#
-# 6 | 9 | 1 # 5 | 3 | 2 # 7 | 4 | 8 #
-#####################################
-# 8 | 5 | 4 # 3 | 6 | 9 # 2 | 1 | 7 #
-#-----------#-----------#-----------#
-# 2 | 1 | 3 # 8 | 7 | 4 # 9 | 6 | 5 #
-#-----------#-----------#-----------#
-# 9 | 6 | 7 # 2 | 5 | 1 # 3 | 8 | 4 #
-#####################################
 ```
+
+Options:
+* `-s`, `--show-init`: display the initial unsolved board before solving
+* `-v`, `--verbose`: show step-by-step solving progress
+
+#### `sudoku-generate`
+
+Interactive CLI to generate a Sudoku puzzle for any allowed values, block dimensions, and difficulty level (`1` easiest to `5` hardest):
+
+```bash
+$ sudoku-generate -s
+```
+
+Options:
+* `-s`, `--return-solution`: display the solution along with the generated problem
+* `-v`, `--verbose`: print generation progress messages
 
 
 ### Web App
@@ -105,9 +98,18 @@ $ sudoku-play
 ```
 
 
+## Tests
+
+Run the test suite from the repository root:
+
+```bash
+$ python3 -m unittest discover -s tests -v
+```
+
+
 ## Algorithm
 
-1. For each empty tile, list possible values by only looking at the block, row, and collumn corresponding to that tile.
+1. For each empty tile, list possible values by only looking at the block, row, and column corresponding to that tile.
 2. Try to solve the tile by only looking at the list of possible values for that tile.
 That is, if the list of possible values only contains one item, then that value must be for that tile.
 3. Compare the list of possible values of tiles in the same block.
@@ -117,7 +119,7 @@ If there is an item in the list of possible values of a tile that is not in the 
 
 Special case:
 If the empty tiles for before and after applying step 1-4 above are the same, then the algorithm above cannot proceed further.
-In this case, find the tile with least number of possible values and set that tile to one of the possible value.
+In this case, find the tile with least number of possible values and set that tile to one of the possible values.
 Then, continue with the algorithm above again.
 
 

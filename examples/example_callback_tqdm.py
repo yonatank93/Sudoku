@@ -1,32 +1,39 @@
-"""In this script, I give an example on a callback function that display
-progress bar based on how many empty tiles are in each iteration.
+"""Example of a callback function that displays a progress bar based on how many
+empty cells remain in each iteration.
 """
 
-
 import json
+from pathlib import Path
 from tqdm import tqdm
 
-from sudoku import Board
+from sudoku import Sudoku
 
 
 # Load the problem
-data = json.load(open("../data/board_10.json", "r"))
+data_path = (
+    Path(__file__).resolve().parent.parent / "data" / "9by9" / "board_10.json"
+)
+with open(data_path, "r") as f:
+    data = json.load(f)
 
-# Instantiate the board
-board = Board(data["board"])
+# Instantiate the Sudoku board
+board = Sudoku(
+    data["board"],
+    allowed_values=data["allowed_values"],
+    block_dim=data["block_dim"],
+)
+total_cells = len(data["allowed_values"]) ** 2
 
 # Instantiate the progress bar
-pbar = tqdm(total=81, desc="Completion")
+pbar = tqdm(total=total_cells, desc="Completion")
 
 
 # Define a custom callback function
 def callback(board_inst):
-    """This callback function display a progress bar that shows the completion
-    of the board. This is done by counting the number of empty tiles.
-    """
-    nempty_tile = len(board_inst.empty_tiles)
+    """Display a progress bar showing the completion of the board."""
+    nempty_cell = len(board_inst.empty_cells)
     pbar.n = 0
-    pbar.update(81 - nempty_tile)
+    pbar.update(total_cells - nempty_cell)
     pbar.refresh()
 
 
