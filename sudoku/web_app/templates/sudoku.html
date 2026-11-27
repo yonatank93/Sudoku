@@ -77,9 +77,18 @@
         </section>
 
         <main class="board-stage">
+            <div class="board-toolbar" aria-label="Board options">
+                <label class="toggle-chip">
+                    <input type="checkbox" id="conflictToggle" checked>
+                    <span>Highlight Conflicts</span>
+                </label>
+            </div>
+
             <div id="boardContainer" class="board-container">
                 <div id="sudokuBoard" class="sudoku-board" role="grid" aria-label="Sudoku board"></div>
             </div>
+
+            <div id="symbolPad" class="symbol-pad" aria-label="Symbol pad"></div>
 
             <p id="solutionMessage"
                class="status-message{% if error_message %} status-error{% endif %}"

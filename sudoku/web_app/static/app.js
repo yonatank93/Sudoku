@@ -45,6 +45,77 @@ function createEmptyGrid(n) {
     return Array.from({ length: n }, () => Array(n).fill(""));
 }
 
+function isSamePeer(r1, c1, r2, c2, blockDim) {
+    if (r1 === r2 || c1 === c2) return true;
+    const [bRows, bCols] = blockDim;
+    return (
+        Math.floor(r1 / bRows) === Math.floor(r2 / bRows) &&
+        Math.floor(c1 / bCols) === Math.floor(c2 / bCols)
+    );
+}
+
+function findConflicts(board, blockDim) {
+    const conflicts = new Set();
+    const n = board.length;
+    const [bRows, bCols] = blockDim;
+
+    const markGroup = coords => {
+        const seen = new Map();
+        for (const [r, c] of coords) {
+            const val = board[r][c];
+            if (!val) continue;
+            if (!seen.has(val)) {
+                seen.set(val, [[r, c]]);
+            } else {
+                seen.get(val).push([r, c]);
+            }
+        }
+        for (const positions of seen.values()) {
+            if (positions.length > 1) {
+                for (const [r, c] of positions) {
+                    conflicts.add(`${r},${c}`);
+                }
+            }
+        }
+    };
+
+    for (let r = 0; r < n; r++) {
+        markGroup(Array.from({ length: n }, (_, c) => [r, c]));
+    }
+    for (let c = 0; c < n; c++) {
+        markGroup(Array.from({ length: n }, (_, r) => [r, c]));
+    }
+    for (let br = 0; br < n; br += bRows) {
+        for (let bc = 0; bc < n; bc += bCols) {
+            const coords = [];
+            for (let dr = 0; dr < bRows; dr++) {
+                for (let dc = 0; dc < bCols; dc++) {
+                    coords.push([br + dr, bc + dc]);
+                }
+            }
+            markGroup(coords);
+        }
+    }
+    return conflicts;
+}
+
+function countRemainingSymbols(board, allowedValues) {
+    const n = allowedValues.length;
+    const counts = {};
+    for (const sym of allowedValues) {
+        counts[sym] = n;
+    }
+    for (let r = 0; r < board.length; r++) {
+        for (let c = 0; c < board[r].length; c++) {
+            const val = board[r][c];
+            if (val && Object.prototype.hasOwnProperty.call(counts, val)) {
+                counts[val] -= 1;
+            }
+        }
+    }
+    return counts;
+}
+
 const state = {
     sizeKey: "9x9",
     allowedValues: [...BOARD_PRESETS["9x9"].allowedValues],
@@ -53,6 +124,7 @@ const state = {
     prefilled: Array.from({ length: 9 }, () => Array(9).fill(false)),
     solverFilled: Array.from({ length: 9 }, () => Array(9).fill(false)),
     selected: null,
+    highlightConflicts: true,
     isSolved: false,
     isBusy: false,
 };
@@ -98,6 +170,100 @@ function setBusy(busy) {
     updateButtonStates();
 }
 
+function setCellValue(row, col, rawVal) {
+    if (state.prefilled[row][col] || state.isSolved || state.isBusy) return;
+    const norm = normalizeCellSymbol(rawVal, state.allowedValues);
+    state.board[row][col] = norm;
+    state.solverFilled[row][col] = false;
+
+    const input = document.querySelector(`#sudokuBoard input[name="cell${row}${col}"]`);
+    if (input) input.value = norm;
+    const cell = input ? input.parentElement : null;
+    if (cell) cell.classList.remove("solver-filled");
+
+    clearStatus();
+    refreshHighlights();
+    renderSymbolPad();
+}
+
+function focusCell(row, col) {
+    const n = state.allowedValues.length;
+    const nr = Math.max(0, Math.min(n - 1, row));
+    const nc = Math.max(0, Math.min(n - 1, col));
+    const input = document.querySelector(`#sudokuBoard input[name="cell${nr}${nc}"]`);
+    if (input) {
+        input.focus();
+    } else {
+        selectCell(nr, nc);
+    }
+}
+
+function refreshHighlights() {
+    const conflicts = state.highlightConflicts
+        ? findConflicts(state.board, state.blockDim)
+        : new Set();
+    const sel = state.selected;
+    const selVal = sel ? state.board[sel.row][sel.col] : "";
+
+    document.querySelectorAll("#sudokuBoard .cell").forEach(cell => {
+        const r = parseInt(cell.dataset.row, 10);
+        const c = parseInt(cell.dataset.col, 10);
+        const isSel = Boolean(sel && sel.row === r && sel.col === c);
+        const isPeer = Boolean(
+            sel && !isSel && isSamePeer(sel.row, sel.col, r, c, state.blockDim)
+        );
+        const isSameVal = Boolean(selVal && !isSel && state.board[r][c] === selVal);
+        const isConflict = conflicts.has(`${r},${c}`);
+
+        cell.classList.toggle("selected", isSel);
+        cell.classList.toggle("peer", isPeer);
+        cell.classList.toggle("same-value", isSameVal);
+        cell.classList.toggle("conflict", isConflict);
+    });
+}
+
+function renderSymbolPad() {
+    const padEl = document.getElementById("symbolPad");
+    if (!padEl) return;
+
+    const remaining = countRemainingSymbols(state.board, state.allowedValues);
+    padEl.innerHTML = "";
+
+    for (const sym of state.allowedValues) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "pad-btn";
+        const rem = remaining[sym];
+        if (rem <= 0) btn.classList.add("completed");
+        btn.disabled = state.isBusy || state.isSolved;
+
+        const symSpan = document.createElement("span");
+        symSpan.textContent = sym;
+        const countSpan = document.createElement("span");
+        countSpan.className = "pad-count";
+        countSpan.textContent = String(Math.max(0, rem));
+
+        btn.appendChild(symSpan);
+        btn.appendChild(countSpan);
+        btn.addEventListener("click", () => {
+            if (!state.selected) return;
+            setCellValue(state.selected.row, state.selected.col, sym);
+        });
+        padEl.appendChild(btn);
+    }
+
+    const eraseBtn = document.createElement("button");
+    eraseBtn.type = "button";
+    eraseBtn.className = "pad-btn erase-btn";
+    eraseBtn.textContent = "Erase";
+    eraseBtn.disabled = state.isBusy || state.isSolved;
+    eraseBtn.addEventListener("click", () => {
+        if (!state.selected) return;
+        setCellValue(state.selected.row, state.selected.col, "");
+    });
+    padEl.appendChild(eraseBtn);
+}
+
 function renderBoard() {
     const boardEl = document.getElementById("sudokuBoard");
     if (!boardEl) return;
@@ -125,9 +291,6 @@ function renderBoard() {
 
             if (state.prefilled[r][c]) cell.classList.add("prefilled");
             if (state.solverFilled[r][c]) cell.classList.add("solver-filled");
-            if (state.selected && state.selected.row === r && state.selected.col === c) {
-                cell.classList.add("selected");
-            }
 
             const input = document.createElement("input");
             input.type = "text";
@@ -143,17 +306,43 @@ function renderBoard() {
                 selectCell(r, c);
             });
 
+            input.addEventListener("keydown", evt => {
+                if (evt.key === "ArrowUp") {
+                    evt.preventDefault();
+                    focusCell(r - 1, c);
+                } else if (evt.key === "ArrowDown") {
+                    evt.preventDefault();
+                    focusCell(r + 1, c);
+                } else if (evt.key === "ArrowLeft") {
+                    evt.preventDefault();
+                    focusCell(r, c - 1);
+                } else if (evt.key === "ArrowRight") {
+                    evt.preventDefault();
+                    focusCell(r, c + 1);
+                } else if (evt.key === "Backspace" || evt.key === "Delete") {
+                    evt.preventDefault();
+                    setCellValue(r, c, "");
+                } else if (
+                    maxLen === 1 &&
+                    evt.key.length === 1 &&
+                    !evt.ctrlKey &&
+                    !evt.metaKey &&
+                    !evt.altKey
+                ) {
+                    const norm = normalizeCellSymbol(evt.key, state.allowedValues);
+                    evt.preventDefault();
+                    if (norm) {
+                        setCellValue(r, c, norm);
+                    }
+                }
+            });
+
             input.addEventListener("input", () => {
                 if (state.prefilled[r][c] || state.isSolved) {
                     input.value = state.board[r][c];
                     return;
                 }
-                const norm = normalizeCellSymbol(input.value, state.allowedValues);
-                input.value = norm;
-                state.board[r][c] = norm;
-                state.solverFilled[r][c] = false;
-                cell.classList.remove("solver-filled");
-                clearStatus();
+                setCellValue(r, c, input.value);
             });
 
             cell.addEventListener("click", () => {
@@ -164,16 +353,14 @@ function renderBoard() {
             boardEl.appendChild(cell);
         }
     }
+    refreshHighlights();
+    renderSymbolPad();
     updateButtonStates();
 }
 
 function selectCell(row, col) {
     state.selected = { row, col };
-    document.querySelectorAll("#sudokuBoard .cell").forEach(cell => {
-        const r = parseInt(cell.dataset.row, 10);
-        const c = parseInt(cell.dataset.col, 10);
-        cell.classList.toggle("selected", r === row && c === col);
-    });
+    refreshHighlights();
 }
 
 function applyBoardConfig(sizeKey, allowedValues, blockDim) {
@@ -457,6 +644,18 @@ if (typeof document !== "undefined") {
             applyBoardConfig("custom", symbols, [bRows, bCols]);
         });
 
+        const conflictToggle = document.getElementById("conflictToggle");
+        const savedConflict = localStorage.getItem("sudokuConflicts");
+        if (savedConflict !== null) {
+            state.highlightConflicts = savedConflict === "true";
+            conflictToggle.checked = state.highlightConflicts;
+        }
+        conflictToggle.addEventListener("change", () => {
+            state.highlightConflicts = conflictToggle.checked;
+            localStorage.setItem("sudokuConflicts", String(state.highlightConflicts));
+            refreshHighlights();
+        });
+
         document.getElementById("generateProblem").addEventListener("click", handleGenerate);
         document.getElementById("solveBtn").addEventListener("click", handleSolve);
         document.getElementById("checkSolution").addEventListener("click", handleCheckSolution);
@@ -474,5 +673,8 @@ if (typeof module !== "undefined" && module.exports) {
         parseCustomSymbols,
         normalizeCellSymbol,
         createEmptyGrid,
+        isSamePeer,
+        findConflicts,
+        countRemainingSymbols,
     };
 }
