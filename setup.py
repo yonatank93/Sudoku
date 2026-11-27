@@ -30,6 +30,7 @@ setuptools.setup(
     long_description=long_description,
     install_requires=install_requires,
     packages=packages,
+    package_data={"sudoku.web_app": ["templates/*", "static/*"]},
     classifiers=["Programming Language :: Python :: 3"],
     include_package_data=True,
     python_requires=">=3.6",

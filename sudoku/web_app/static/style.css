@@ -1,0 +1,44 @@
+/* CSS to make input boxes square */
+input[type="text"] {
+    width: 40px;   /* Set width of the input */
+    height: 40px;  /* Set height to be the same as width for a square */
+    text-align: center; /* Center the text inside the box */
+    font-size: 20px; /* Make the font larger for better visibility */
+    border: 1px solid #f4f4f4; /* Single border around each input */
+    padding: 0; /* Remove extra padding inside the input */
+    margin: 0; /* Remove margin to avoid extra space around the input */
+    box-sizing: border-box; /* Ensure padding and border are included in the width and height */
+}
+
+table {
+    border-collapse: collapse; /* Collapse borders to avoid double borders */
+    border-spacing: 0; /* Remove space between cells */
+}
+
+td {
+    padding: 0; /* Remove extra padding in table cells */
+}
+
+/* Thicker border for 3x3 box boundaries */
+td:nth-child(3n) {
+    border-right: 5px solid black; /* Thicker right border for every 3rd column */
+}
+
+tr:nth-child(3n) td {
+    border-bottom: 5px solid black; /* Thicker bottom border for every 3rd row */
+}
+
+/* Ensure bottom and right borders are not visible */
+tr:nth-last-child(1) td {
+    border-bottom: none;
+}
+
+td:nth-last-child(1) {
+    border-right: none;
+}
+
+.prefilled {
+    background-color: lightgray; /* Highlight prefilled cells */
+    font-weight: bold; /* Make text bold */
+    cursor: not-allowed; /* Indicate readonly cells with cursor */
+}

@@ -1,0 +1,2 @@
+recursive-include sudoku/web_app/templates *
+recursive-include sudoku/web_app/static *

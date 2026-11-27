@@ -166,6 +166,19 @@ class TestWebAppLogic(unittest.TestCase):
         self.assertFalse(ctx["is_solved"])
         self.assertIn("no valid solution", ctx["error_message"])
 
+    def test_parse_cli_args(self):
+        defaults = self.webapp.parse_cli_args([])
+        self.assertEqual(defaults.host, "127.0.0.1")
+        self.assertEqual(defaults.port, 5000)
+        self.assertTrue(defaults.debug)
+
+        custom = self.webapp.parse_cli_args(
+            ["--host", "0.0.0.0", "--port", "8080", "--no-debug"]
+        )
+        self.assertEqual(custom.host, "0.0.0.0")
+        self.assertEqual(custom.port, 8080)
+        self.assertFalse(custom.debug)
+
     def test_generate_and_check_solution_routes(self):
         req = self._stub.request
 
@@ -200,8 +213,14 @@ class TestWebAppLogic(unittest.TestCase):
 class TestWebAppTemplate(unittest.TestCase):
     def setUp(self):
         env = jinja2.Environment(loader=jinja2.FileSystemLoader(str(TEMPLATE_DIR)))
+        env.globals["url_for"] = lambda endpoint, filename="": f"/{endpoint}/{filename}"
         self.template = env.get_template("sudoku.html")
         self.empty = [[0] * 9 for _ in range(9)]
+
+    def test_static_assets_exist(self):
+        static_dir = TEMPLATE_DIR.parent / "static"
+        self.assertTrue((static_dir / "style.css").is_file())
+        self.assertTrue((static_dir / "app.js").is_file())
 
     def test_template_fresh_get_not_readonly_or_disabled(self):
         rendered = self.template.render(
@@ -210,8 +229,9 @@ class TestWebAppTemplate(unittest.TestCase):
             is_solved=False,
             error_message="",
         )
-        self.assertIn("const initialSolved = false;", rendered)
-        self.assertNotIn('localStorage.setItem("buttonsDisabled"', rendered)
+        self.assertIn('data-initial-solved="false"', rendered)
+        self.assertIn("/static/style.css", rendered)
+        self.assertIn("/static/app.js", rendered)
         table_html = rendered.split("<table")[1].split("</table>")[0]
         self.assertNotIn("readonly", table_html)
 
@@ -224,7 +244,7 @@ class TestWebAppTemplate(unittest.TestCase):
             is_solved=False,
             error_message="Board is invalid",
         )
-        self.assertIn("const initialSolved = false;", rendered)
+        self.assertIn('data-initial-solved="false"', rendered)
         self.assertIn("Board is invalid", rendered)
         table_html = rendered.split("<table")[1].split("</table>")[0]
         self.assertIn('value="5"', table_html)
@@ -238,7 +258,7 @@ class TestWebAppTemplate(unittest.TestCase):
             is_solved=True,
             error_message="",
         )
-        self.assertIn("const initialSolved = true;", rendered)
+        self.assertIn('data-initial-solved="true"', rendered)
         table_html = rendered.split("<table")[1].split("</table>")[0]
         self.assertEqual(table_html.count("readonly"), 81)
         n_clues = sum(cell > 0 for row in b01["board"] for cell in row)
@@ -259,7 +279,7 @@ class TestWebAppFlaskIntegration(unittest.TestCase):
     def test_get_index(self):
         resp = self.client.get("/")
         self.assertEqual(resp.status_code, 200)
-        self.assertIn(b"const initialSolved = false;", resp.data)
+        self.assertIn(b'data-initial-solved="false"', resp.data)
 
     def test_generate_endpoint(self):
         resp = self.client.get("/generate?level=3")
@@ -285,13 +305,13 @@ class TestWebAppFlaskIntegration(unittest.TestCase):
     def test_post_solve_valid_and_invalid(self):
         resp_ok = self.client.post("/", data=_board_to_form(self.b01["board"]))
         self.assertEqual(resp_ok.status_code, 200)
-        self.assertIn(b"const initialSolved = true;", resp_ok.data)
+        self.assertIn(b'data-initial-solved="true"', resp_ok.data)
 
         bad_form = _board_to_form(self.b01["board"])
         bad_form["cell00"] = "7"
         resp_bad = self.client.post("/", data=bad_form)
         self.assertEqual(resp_bad.status_code, 200)
-        self.assertIn(b"const initialSolved = false;", resp_bad.data)
+        self.assertIn(b'data-initial-solved="false"', resp_bad.data)
         self.assertIn(b"repetition", resp_bad.data)
 
 

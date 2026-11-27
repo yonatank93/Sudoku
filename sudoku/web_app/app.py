@@ -1,3 +1,4 @@
+import argparse
 from flask import Flask, render_template, request, jsonify
 from sudoku import generate_problem, Sudoku
 
@@ -111,9 +112,33 @@ def check_solution():
     return jsonify({"solved": solved})
 
 
+def parse_cli_args(argv=None):
+    """Parse CLI arguments for the sudoku-play web server."""
+    parser = argparse.ArgumentParser(description="Run the Sudoku Flask web app")
+    parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Host interface to bind to (default: 127.0.0.1)",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=5000,
+        help="Port to listen on (default: 5000)",
+    )
+    parser.add_argument(
+        "--debug",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Enable or disable Flask debug mode (default: enabled)",
+    )
+    return parser.parse_args(argv)
+
+
 # Add the main() function to start the Flask app
-def main():
-    app.run(debug=True)
+def main(argv=None):
+    args = parse_cli_args(argv)
+    app.run(host=args.host, port=args.port, debug=args.debug)
 
 
 if __name__ == "__main__":
