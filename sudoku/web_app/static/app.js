@@ -725,26 +725,123 @@ function getPayload() {
     };
 }
 
-async function handleGenerate() {
-    const level = parseInt(document.getElementById("difficulty").value, 10);
-    const params = new URLSearchParams({ level: String(level) });
+let pyodideWorker = null;
+let pyodideNextId = 1;
+const pyodidePending = new Map();
 
-    if (state.sizeKey !== "custom") {
-        params.set("size", state.sizeKey);
-    } else {
-        params.set("allowed_values", state.allowedValues.join(","));
-        params.set("block_rows", String(state.blockDim[0]));
-        params.set("block_cols", String(state.blockDim[1]));
+function isPyodideMode() {
+    return (
+        typeof document !== "undefined" &&
+        document.body &&
+        document.body.dataset.mode === "pyodide"
+    );
+}
+
+function getPyodideWorker() {
+    if (!pyodideWorker) {
+        const workerUrl =
+            (document.body && document.body.dataset.workerUrl) ||
+            "./pyodide_worker.js";
+        pyodideWorker = new Worker(workerUrl);
+        pyodideWorker.onmessage = event => {
+            const { id, ok, data, error } = event.data || {};
+            const entry = pyodidePending.get(id);
+            if (!entry) return;
+            pyodidePending.delete(id);
+            if (ok) {
+                entry.resolve(data);
+            } else {
+                entry.reject(new Error(error || "Python engine error."));
+            }
+        };
+        pyodideWorker.onerror = err => {
+            const msg = (err && err.message) || "Pyodide worker failed.";
+            for (const entry of pyodidePending.values()) {
+                entry.reject(new Error(msg));
+            }
+            pyodidePending.clear();
+        };
+    }
+    return pyodideWorker;
+}
+
+function sendWorkerMessage(message) {
+    return new Promise((resolve, reject) => {
+        const id = pyodideNextId++;
+        pyodidePending.set(id, { resolve, reject });
+        getPyodideWorker().postMessage({ ...message, id });
+    });
+}
+
+async function initPyodideBackend() {
+    const pkgUrl =
+        (document.body && document.body.dataset.pkgUrl) || "./sudoku_pkg.zip";
+    setBusy(true);
+    setStatus("Loading Python Sudoku engine (first visit may take a few seconds)…");
+    try {
+        await sendWorkerMessage({ type: "init", pkgUrl });
+        setStatus("Python engine ready! Click Generate Puzzle or enter a board.", "success");
+    } catch (error) {
+        setStatus(`Failed to load Python engine: ${error.message}`, "error");
+    } finally {
+        setBusy(false);
+    }
+}
+
+async function apiRequest(action, payload) {
+    if (isPyodideMode()) {
+        return sendWorkerMessage({ type: "call", action, payload });
     }
 
-    setBusy(true);
-    setStatus("Generating puzzle…");
-    try {
+    if (action === "generate") {
+        const params = new URLSearchParams({ level: String(payload.level) });
+        if (payload.size) {
+            params.set("size", payload.size);
+        } else {
+            params.set("allowed_values", payload.allowed_values.join(","));
+            params.set("block_rows", String(payload.block_dim[0]));
+            params.set("block_cols", String(payload.block_dim[1]));
+        }
         const response = await fetch(`/generate?${params.toString()}`);
         const data = await response.json();
         if (!response.ok) {
             throw new Error(data.error || "Failed to generate Sudoku problem.");
         }
+        return data;
+    }
+
+    const endpointMap = {
+        solve: "/solve",
+        solve_steps: "/solve_steps",
+        check_solution: "/check_solution",
+    };
+    const response = await fetch(endpointMap[action], {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.error || "Request failed.");
+    }
+    return data;
+}
+
+async function handleGenerate() {
+    const level = parseInt(document.getElementById("difficulty").value, 10);
+    const reqPayload =
+        state.sizeKey !== "custom"
+            ? { level, size: state.sizeKey }
+            : {
+                  level,
+                  allowed_values: state.allowedValues,
+                  block_dim: state.blockDim,
+              };
+
+    setBusy(true);
+    setStatus("Generating puzzle…");
+    try {
+        const data = await apiRequest("generate", reqPayload);
         state.allowedValues = data.allowed_values.map(String);
         state.blockDim = data.block_dim;
         loadBoardData(data.problem, { markPrefilled: true, markSolved: false });
@@ -761,15 +858,7 @@ async function handleSolve() {
     setBusy(true);
     setStatus("Solving…");
     try {
-        const response = await fetch("/solve", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(getPayload()),
-        });
-        const data = await response.json();
-        if (!response.ok) {
-            throw new Error(data.error || "Could not solve this board.");
-        }
+        const data = await apiRequest("solve", getPayload());
 
         const n = state.allowedValues.length;
         for (let r = 0; r < n; r++) {
@@ -803,12 +892,7 @@ async function handleSolve() {
 async function handleCheckSolution() {
     setBusy(true);
     try {
-        const response = await fetch("/check_solution", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(getPayload()),
-        });
-        const data = await response.json();
+        const data = await apiRequest("check_solution", getPayload());
         if (data.solved) {
             stopTimer();
             setStatus(
@@ -850,15 +934,7 @@ async function ensureStepTrace() {
     setBusy(true);
     setStatus("Computing solver steps…");
     try {
-        const response = await fetch("/solve_steps", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(getPayload()),
-        });
-        const data = await response.json();
-        if (!response.ok) {
-            throw new Error(data.error || "Could not solve this board.");
-        }
+        const data = await apiRequest("solve_steps", getPayload());
         state.stepTrace = data.steps;
         state.stepIndex = 0;
         if (data.total_steps === 0) {
@@ -1171,6 +1247,9 @@ if (typeof document !== "undefined") {
         document.getElementById("copyBoardBtn").addEventListener("click", handleCopyBoard);
 
         hydrateInitialServerState();
+        if (isPyodideMode()) {
+            initPyodideBackend();
+        }
     });
 }
 

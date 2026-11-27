@@ -326,6 +326,7 @@ class TestWebAppTemplate(unittest.TestCase):
         static_dir = TEMPLATE_DIR.parent / "static"
         self.assertTrue((static_dir / "style.css").is_file())
         self.assertTrue((static_dir / "app.js").is_file())
+        self.assertTrue((static_dir / "pyodide_worker.js").is_file())
 
     def test_template_fresh_get_renders_controls_and_initial_state(self):
         rendered = self.template.render(
@@ -335,7 +336,17 @@ class TestWebAppTemplate(unittest.TestCase):
             error_message="",
         )
         self.assertIn('data-initial-solved="false"', rendered)
+        self.assertIn('data-mode="flask"', rendered)
         self.assertIn("/static/style.css", rendered)
+
+        rendered_pyodide = self.template.render(
+            solution=self.empty,
+            original_puzzle=self.empty,
+            is_solved=False,
+            error_message="",
+            app_mode="pyodide",
+        )
+        self.assertIn('data-mode="pyodide"', rendered_pyodide)
         self.assertIn("/static/app.js", rendered)
         self.assertIn('id="boardSize"', rendered)
         self.assertIn('id="themeToggle"', rendered)
@@ -377,14 +388,15 @@ class TestWebAppFrontendJS(unittest.TestCase):
     """Syntax-check and unit-test pure frontend JS helpers via Node."""
 
     def test_app_js_syntax(self):
-        app_js = STATIC_DIR / "app.js"
-        res = subprocess.run(
-            ["node", "--check", str(app_js)],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        self.assertEqual(res.returncode, 0, res.stderr)
+        for fname in ("app.js", "pyodide_worker.js"):
+            with self.subTest(file=fname):
+                res = subprocess.run(
+                    ["node", "--check", str(STATIC_DIR / fname)],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(res.returncode, 0, res.stderr)
 
     def test_app_js_pure_helpers(self):
         app_js = str(STATIC_DIR / "app.js")
