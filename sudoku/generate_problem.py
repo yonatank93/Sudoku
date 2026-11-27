@@ -77,7 +77,11 @@ def find_empty(board: list) -> tuple:
 
 
 def fill_board(
-    board: list, allowed_values: list, block_dim: tuple, seed: int = None
+    board: list,
+    allowed_values: list,
+    block_dim: tuple,
+    seed: int = None,
+    rng: random.Random = None,
 ) -> bool:
     """Main backtracking function to fill the Sudoku board.
 
@@ -91,7 +95,9 @@ def fill_board(
         A tuple indicating the block dimensions, i.e., number of rows and
         columns in each block.
     seed: int, optional
-        Random seed for shuffling allowed values.
+        Random seed for shuffling allowed values. Ignored if ``rng`` is given.
+    rng: random.Random, optional
+        Random number generator instance to use across recursive calls.
 
     Returns
     -------
@@ -102,20 +108,21 @@ def fill_board(
     -----
     This function overwrites the input board in place.
     """
+    if rng is None:
+        rng = random.Random(seed) if seed is not None else random
+
     cell = find_empty(board)
     if not cell:
         return True
 
     r, c = cell
-    nums = allowed_values
-    if seed is not None:
-        random.seed(seed)
-    random.shuffle(nums)
+    nums = list(allowed_values)
+    rng.shuffle(nums)
 
     for num in nums:
         if is_valid(board, r, c, num, block_dim):
             board[r][c] = num
-            if fill_board(board, allowed_values, block_dim, seed):
+            if fill_board(board, allowed_values, block_dim, rng=rng):
                 return True
             board[r][c] = 0
 
@@ -123,7 +130,10 @@ def fill_board(
 
 
 def generate_full_solution(
-    allowed_values: list, block_dim: tuple, seed: int = None
+    allowed_values: list,
+    block_dim: tuple,
+    seed: int = None,
+    rng: random.Random = None,
 ) -> list:
     """Generate a fully solved Sudoku board using backtracking.
 
@@ -137,24 +147,35 @@ def generate_full_solution(
         columns in each block. The default is (3, 3), which is the normal
         Sudoku setup.
     seed: int, optional
-        Random seed for generating the board.
+        Random seed for generating the board. Ignored if ``rng`` is given.
+    rng: random.Random, optional
+        Random number generator instance.
 
     Returns
     -------
     list
         A fully solved Sudoku board.
     """
+    if rng is None:
+        rng = random.Random(seed) if seed is not None else random
+
     # Start with an empty board
     nallowed_values = len(allowed_values)
     board = [
         [0 for _ in range(nallowed_values)] for _ in range(nallowed_values)
     ]
     # Fill the board using backtracking
-    fill_board(board, allowed_values, block_dim, seed)
+    if not fill_board(board, allowed_values, block_dim, rng=rng):
+        raise RuntimeError("Failed to generate a full Sudoku solution.")
     return board
 
 
-def _remove_elements(board: list, nremove: int, seed: int = None) -> np.ndarray:
+def _remove_elements(
+    board: list,
+    nremove: int,
+    seed: int = None,
+    rng: random.Random = None,
+) -> list:
     """Randomly remove elements from a solved board.
 
     Parameters
@@ -164,13 +185,18 @@ def _remove_elements(board: list, nremove: int, seed: int = None) -> np.ndarray:
     nremove: int
         Number of cells to remove.
     seed: int, optional
-        Random seed for shuffling cells.
+        Random seed for shuffling cells. Ignored if ``rng`` is given.
+    rng: random.Random, optional
+        Random number generator instance.
 
     Returns
     -------
-    np.ndarray
+    list
         Similar to input solved board, but with random cells that are empty.
     """
+    if rng is None:
+        rng = random.Random(seed) if seed is not None else random
+
     nvals = len(board)  # The same as number of allowed values
     # Removing random elements
     assert nremove > 0, "You don't want any empty cell? Not fun."
@@ -181,9 +207,7 @@ def _remove_elements(board: list, nremove: int, seed: int = None) -> np.ndarray:
 
     # List of all cell positions and shuffle them
     cells = [(r, c) for r in range(nvals) for c in range(nvals)]
-    if seed is not None:
-        random.seed(seed)
-    random.shuffle(cells)
+    rng.shuffle(cells)
 
     for ii in range(nremove):
         row, col = cells[ii]
@@ -192,7 +216,10 @@ def _remove_elements(board: list, nremove: int, seed: int = None) -> np.ndarray:
 
 
 def _get_ncells_to_remove(
-    level: int, nallowed_values: int, seed: int = None
+    level: int,
+    nallowed_values: int,
+    seed: int = None,
+    rng: random.Random = None,
 ) -> int:
     """Get the number of cells to remove, given the level of problem requested.
 
@@ -209,17 +236,21 @@ def _get_ncells_to_remove(
         Requested level of difficulty. Lower number means easier level of
         difficulty.
     nallowed_values: int
-        Number of allowed values in the Sudoku board, e.g., 81 for 9-by-9 board.
+        Number of allowed values in the Sudoku board, e.g., 9 for 9-by-9 board.
     seed: int, optional
-        Random seed for selecting number of cells to remove.
+        Random seed for selecting number of cells to remove. Ignored if ``rng``
+        is given.
+    rng: random.Random, optional
+        Random number generator instance.
 
     Returns
     -------
     int
         Number of cells to remove.
     """
-    if seed is not None:
-        np.random.seed(seed)
+    if rng is None:
+        rng = random.Random(seed) if seed is not None else random
+
     ncells = nallowed_values**2
     if ncells > 4:
         # Padding to make subsequent levels more distinct
@@ -246,7 +277,7 @@ def _get_ncells_to_remove(
     # Given level, we randomly select the number of cells to remove
     lb, ub = bins[level - 1]
     if ub > lb:
-        nremove = np.random.randint(lb, ub)
+        nremove = rng.randrange(lb, ub)
     else:
         # This is when the board is too small, so that the padded bins might
         # have same lower and upper bounds, or even upper bound is smaller than
@@ -307,15 +338,17 @@ def generate_problem(
     elif isinstance(allowed_values, range):
         allowed_values = list(allowed_values)
 
+    rng = random.Random(seed) if seed is not None else random
+
     # Generate a full solution first
     if verbose:
         print("Generating full solution...")
-    solution = generate_full_solution(allowed_values, block_dim)
+    solution = generate_full_solution(allowed_values, block_dim, rng=rng)
     # Randomly remove elements according to the requested level
     if verbose:
         print("Creating problem by removing elements...")
-    nremove = _get_ncells_to_remove(level, len(allowed_values), seed)
-    board_problem = _remove_elements(solution, nremove, seed)
+    nremove = _get_ncells_to_remove(level, len(allowed_values), rng=rng)
+    board_problem = _remove_elements(solution, nremove, rng=rng)
     if verbose:
         print("Problem generated.")
 
