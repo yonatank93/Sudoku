@@ -32,10 +32,10 @@
         }
         /* Ensure bottom and right borders are not visible */
         tr:nth-last-child(1) td {
-            border-bottom: none
+            border-bottom: none;
         }
         td:nth-last-child(1) {
-            border-right: none
+            border-right: none;
         }
         .prefilled {
             background-color: lightgray; /* Highlight prefilled cells */
@@ -45,12 +45,62 @@
     </style>
 
     <script>
+        const initialSolved = {{ 'true' if is_solved else 'false' }};
+
+        function disableButtons() {
+            const checkSolutionBtn = document.getElementById("checkSolution");
+            const clearInputBtn = document.getElementById("clearInput");
+
+            checkSolutionBtn.disabled = true;
+            clearInputBtn.disabled = true;
+
+            checkSolutionBtn.style.backgroundColor = "gray";
+            checkSolutionBtn.style.cursor = "not-allowed";
+            clearInputBtn.style.backgroundColor = "gray";
+            clearInputBtn.style.cursor = "not-allowed";
+        }
+
+        function enableButtons() {
+            const checkSolutionBtn = document.getElementById("checkSolution");
+            const clearInputBtn = document.getElementById("clearInput");
+
+            checkSolutionBtn.disabled = false;
+            clearInputBtn.disabled = false;
+
+            checkSolutionBtn.style.backgroundColor = "";
+            checkSolutionBtn.style.cursor = "pointer";
+            clearInputBtn.style.backgroundColor = "";
+            clearInputBtn.style.cursor = "pointer";
+        }
+
+        function clearSolutionMessage() {
+            const messageElement = document.getElementById("solutionMessage");
+            messageElement.textContent = "";
+            messageElement.style.color = "";
+        }
+
+        function displayErrorMessage(message) {
+            const messageElement = document.getElementById("solutionMessage");
+            messageElement.textContent = message;
+            messageElement.style.color = "red";
+        }
+
         document.addEventListener("DOMContentLoaded", function () {
+            // Clean up any legacy disabled flag from older sessions
+            localStorage.removeItem("buttonsDisabled");
+
             // Difficulty restoration
             const difficultySlider = document.getElementById("difficulty");
             const savedDifficulty = localStorage.getItem("difficulty");
             if (savedDifficulty) {
                 difficultySlider.value = savedDifficulty;
+            }
+
+            // Disable play buttons only when showing a solved board from the server
+            if (initialSolved) {
+                disableButtons();
+            } else {
+                enableButtons();
             }
 
             // Check solution handler
@@ -63,16 +113,31 @@
                 })
                 .then(response => response.json())
                 .then(data => displaySolutionMessage(data.solved))
-                .catch(error => console.error("Error checking solution:", error));
+                .catch(error => {
+                    console.error("Error checking solution:", error);
+                    displayErrorMessage("Could not check the solution. Please try again.");
+                });
             });
 
             // Fetch Sudoku problem when "Generate Problem" is clicked
             document.getElementById("generateProblem").addEventListener("click", function () {
                 const level = document.getElementById("difficulty").value;
                 fetch(`/generate?level=${level}`)
-                    .then(response => response.json())
-                    .then(data => fillSudokuBoard(data.problem))
-                    .catch(error => console.error("Error fetching Sudoku problem:", error));
+                    .then(async response => {
+                        const data = await response.json();
+                        if (!response.ok) {
+                            throw new Error(data.error || "Failed to generate Sudoku problem.");
+                        }
+                        return data;
+                    })
+                    .then(data => {
+                        fillSudokuBoard(data.problem);
+                        enableButtons();
+                    })
+                    .catch(error => {
+                        console.error("Error fetching Sudoku problem:", error);
+                        displayErrorMessage(error.message);
+                    });
             });
 
             // Input validation (1-9 only)
@@ -85,67 +150,6 @@
             });
         });
 
-        // Disable buttons when the form is submitted (Solve button)
-        document.addEventListener("DOMContentLoaded", function () {
-	    // Check if the buttons should be disabled on page load
-	    if (localStorage.getItem("buttonsDisabled") === "true") {
-		disableButtons();
-	    }
-
-	    // Disable buttons when the form is submitted (Solve button)
-	    document.querySelector("form").addEventListener("submit", function () {
-		disableButtons();
-	    });
-
-	    // Re-enable buttons when Generate Problem is clicked
-	    document.getElementById("generateProblem").addEventListener("click", function () {
-		enableButtons();
-	    });
-
-	    // Re-enable buttons when Reset All is clicked
-	    document.querySelector("button[onclick='resetAll()']").addEventListener("click", function () {
-		enableButtons();
-	    });
-
-	    // Function to disable buttons
-	    function disableButtons() {
-		const checkSolutionBtn = document.getElementById("checkSolution");
-		const clearInputBtn = document.querySelector("button[onclick='clearUserInputs()']");
-
-		// Disable buttons
-		checkSolutionBtn.disabled = true;
-		clearInputBtn.disabled = true;
-
-		// Gray out buttons using CSS
-		checkSolutionBtn.style.backgroundColor = "gray";
-		checkSolutionBtn.style.cursor = "not-allowed";
-		clearInputBtn.style.backgroundColor = "gray";
-		clearInputBtn.style.cursor = "not-allowed";
-
-		// Save the disabled state in localStorage
-		localStorage.setItem("buttonsDisabled", "true");
-	    }
-
-	    // Function to re-enable buttons
-	    function enableButtons() {
-		const checkSolutionBtn = document.getElementById("checkSolution");
-		const clearInputBtn = document.querySelector("button[onclick='clearUserInputs()']");
-
-		// Enable buttons
-		checkSolutionBtn.disabled = false;
-		clearInputBtn.disabled = false;
-
-		// Reset button styles
-		checkSolutionBtn.style.backgroundColor = ""; // Default button color
-		checkSolutionBtn.style.cursor = "pointer";
-		clearInputBtn.style.backgroundColor = ""; // Default button color
-		clearInputBtn.style.cursor = "pointer";
-
-		// Remove the disabled state from localStorage
-		localStorage.removeItem("buttonsDisabled");
-	    }
-	});
-
         // Store difficulty level before submitting the form
         function storeDifficulty() {
             localStorage.setItem("difficulty", document.getElementById("difficulty").value);
@@ -155,18 +159,21 @@
         function clearUserInputs() {
             document.querySelectorAll('input[type="text"]').forEach(cell => {
                 if (!cell.classList.contains("prefilled")) {
-                    cell.value = ''; // Clear only user-filled cells
+                    cell.value = "";
                 }
             });
+            clearSolutionMessage();
         }
 
         // Clear all input fields
         function resetAll(resetDifficulty = true) {
             document.querySelectorAll('input[type="text"]').forEach(cell => {
-                cell.value = '';  // Clear all values
-                cell.removeAttribute("readonly");  // Allow editing all cells
-                cell.classList.remove("prefilled");  // Remove highlight styles
+                cell.value = "";
+                cell.removeAttribute("readonly");
+                cell.classList.remove("prefilled");
             });
+            enableButtons();
+            clearSolutionMessage();
 
             if (resetDifficulty) {
                 document.getElementById("difficulty").value = 3;
@@ -180,7 +187,7 @@
                 const row = [];
                 for (let j = 0; j < 9; j++) {
                     const cell = document.querySelector(`input[name="cell${i}${j}"]`);
-                    row.push(cell.value ? parseInt(cell.value) : 0);
+                    row.push(cell.value ? parseInt(cell.value, 10) : 0);
                 }
                 sudokuInput.push(row);
             }
@@ -203,18 +210,19 @@
         function fillSudokuBoard(problem) {
             for (let i = 0; i < 9; i++) {
                 for (let j = 0; j < 9; j++) {
-                    let cell = document.querySelector(`input[name="cell${i}${j}"]`);
+                    const cell = document.querySelector(`input[name="cell${i}${j}"]`);
                     if (problem[i][j] > 0) {
                         cell.value = problem[i][j];
                         cell.setAttribute("readonly", true);
                         cell.classList.add("prefilled");
                     } else {
-                        cell.value = '';
+                        cell.value = "";
                         cell.removeAttribute("readonly");
                         cell.classList.remove("prefilled");
                     }
                 }
             }
+            clearSolutionMessage();
         }
     </script>
 </head>
@@ -249,25 +257,25 @@
                     <input type="text" name="cell{{i}}{{j}}" size="1" maxlength="1"
                            oninput="this.value = this.value.replace(/[^1-9]/g, '')"
                            value="{{ solution[i][j] if solution[i][j] > 0 else '' }}"
-			   {% if solution[i][j] > 0 %} readonly {% endif %}
-		    {% if original_puzzle[i][j] > 0 %} class="prefilled" {% endif %}>
+                           {% if is_solved and solution[i][j] > 0 %} readonly {% endif %}
+                           {% if original_puzzle[i][j] > 0 %} class="prefilled" {% endif %}>
                 </td>
                 {% endfor %}
             </tr>
             {% endfor %}
         </table>
         <br>
-        <p id="solutionMessage" style="font-size: 24px; font-weight: bold;"></p>
+        <p id="solutionMessage" style="font-size: 24px; font-weight: bold;{% if error_message %} color: red;{% endif %}">{{ error_message or '' }}</p>
 
         <!-- Check Solution Button -->
         <button type="button" id="checkSolution"><strong>Check Solution</strong></button>
 
         <!-- Clear User Input Button -->
-        <button type="button" onclick="clearUserInputs()">Clear Input</button>
+        <button type="button" id="clearInput" onclick="clearUserInputs()">Clear Input</button>
         <br><br>
 
         <!-- Solve Button -->
-	<button type="submit"><strong>Solve</strong></button>
+        <button type="submit"><strong>Solve</strong></button>
 
         <!-- Reset Button (clears the input fields) -->
         <button type="button" onclick="resetAll()">Reset All</button>

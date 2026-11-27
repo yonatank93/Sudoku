@@ -1,10 +1,8 @@
-"""This example is to give a basic usage of this package to solve a Sudoku
-problem.
-"""
+"""This example gives a basic usage of this package to solve a Sudoku problem."""
 
-from sudoku import Board
+from sudoku import Sudoku
 
-# Write the problem as a list. Zeros represent empty tiles.
+# Write the problem as a list. Zeros represent empty cells.
 problem = [
     [4, 9, 6, 7, 0, 0, 8, 5, 2],
     [0, 7, 0, 0, 4, 8, 3, 6, 9],
@@ -17,8 +15,8 @@ problem = [
     [0, 0, 8, 0, 5, 0, 2, 0, 7],
 ]
 
-# Instantiate the board
-board = Board(problem)
+# Instantiate the Sudoku board
+board = Sudoku(problem)
 # Solve the problem
 board.solve()
 # Print the solved board

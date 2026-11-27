@@ -1,0 +1,639 @@
+import pickle
+import copy
+import time
+from datetime import timedelta
+from typing import List, Sequence, Callable, Dict, Union
+
+import numpy as np
+
+from sudoku.cell import Cell, empty_cell_repr
+from sudoku.groups import Row, Column, Block
+
+default_allowed_values = range(1, 10)
+
+
+def default_callback(board):
+    """A default callback function that is called after each iteration in the
+    main while loop in :meth:`~sudoku.Board.solve`. It can be used to
+    monitor the progress, e.g., by printing the number of empty cells in the
+    board. The default behavior does nothing.
+
+    Parameters
+    ----------
+    board: :class:`~sudoku.Board` instance.
+        Instance of the Sudoku board class.
+    """
+    pass
+
+
+class Sudoku:
+    """A main class to define the Sudoku problem and solve it.
+
+    Parameters
+    ----------
+    board: array-like
+        An array-like that represent the Sudoku problem. It is represented by a
+        square array-like, where the elements of the array give show the value
+        in each corresponding cell. The value of zero means that the cell is
+        empty.
+    allowed_values: set-like, optional
+        A set of allowed values in the Sudoku board. The default is a set of
+        integers from 1 to 9, inclusive, which is the normal Sudoku setup.
+    block_dim: tuple, optional
+        A tuple that represent the dimension (height, width) of each block. The
+        default is (3, 3), which is the normal Sudoku setup.
+
+    Attributes
+    ----------
+    board: array-like
+        An array-like that represent the Sudoku board. This array is mutated
+        during the solving process, and can be called to access the solved
+        board.
+    orig_board: array-like
+        An array that represent the initial state of the Sudoku board that
+        shows the problem.
+
+    Notes
+    -----
+    We will call a block to refer to a :math:`3 \times 3` block in which no
+    numbers can be repeated in that block.
+    """
+
+    def __init__(
+        self,
+        board=None,
+        allowed_values=default_allowed_values,
+        block_dim=(3, 3),
+    ):
+        self.allowed_values = (
+            [val for val in allowed_values]
+            if isinstance(allowed_values, str)
+            else allowed_values
+        )
+        self._nallowed_values = len(self.allowed_values)
+        assert self._nallowed_values > 0, "The allowed values cannot be empty."
+        assert len(self.allowed_values) == len(
+            set(self.allowed_values)
+        ), "The allowed values should not contain duplicates."
+
+        # Check block dimensions
+        self.block_dim = block_dim
+        self._nblocks = self.block_dim[0] * self.block_dim[1]
+        assert self._nblocks == self._nallowed_values, (
+            "The dimension of block is incorrect. "
+            "The product of the dimensions must equal to the number of allowed values."
+        )
+
+        # Initializations
+        self._board = None
+        self._cells_cache = None
+        self._cells_by_block = None
+        self._cells_by_row = None
+        self._cells_by_column = None
+        self.orig_board = copy.deepcopy(board)
+        self._intermediate_state = {}
+        self.niter = 0
+        self._nstep_call = 0
+
+        # Set the board
+        if board is not None:
+            self.board = copy.deepcopy(board)
+
+    @property
+    def board(self) -> Union[list, np.ndarray]:
+        """Return the Sudoku board."""
+        return self._board
+
+    @board.setter
+    def board(self, board: Union[list, np.ndarray]) -> None:
+        """Set the Sudoku board.
+
+        Parameters
+        ----------
+        board: array-like
+            An array-like that represent the Sudoku problem. It is represented
+            by a square array-like with the dimension equals to the length of
+            allowed values.
+            The elements of the array give the value in each cell, and value of
+            zero means that the cell is empty.
+        """
+        # Convert the format as necessary
+        _board = [list(row) for row in board]
+        board = copy.deepcopy(_board)
+        # Check if the board has the correct shape
+        assert np.array(board).shape == (
+            self._nallowed_values,
+            self._nallowed_values,
+        ), (
+            "The board should be a "
+            f"{self._nallowed_values}x{self._nallowed_values} array-like",
+        )
+        # Check if the values in the given board are valid
+        unique_board_values = list(
+            set(
+                [
+                    el
+                    for row in board
+                    for el in row
+                    if el not in empty_cell_repr or el in self.allowed_values
+                ]
+            )
+        )
+        values_not_allowed = [
+            val for val in unique_board_values if val not in self.allowed_values
+        ]
+        assert len(values_not_allowed) == 0, (
+            f"The board contains values ({values_not_allowed}) that are not "
+            f"in the allowed values ({self.allowed_values})."
+        )
+
+        self._board = copy.deepcopy(board)
+        self._rebuild_cell_cache()
+        self.validate_board()
+        if self.orig_board is None:
+            self.orig_board = copy.deepcopy(board)
+
+    def _rebuild_cell_cache(self):
+        """Build cached Cell objects and group views bound to self._board."""
+        self._cells_cache = [
+            Cell(self._board, [row, col], self.allowed_values, self.block_dim)
+            for row in range(self._nallowed_values)
+            for col in range(self._nallowed_values)
+        ]
+        self._cells_by_block = [
+            [cell for cell in self._cells_cache if cell.block_idx == b]
+            for b in range(self._nblocks)
+        ]
+        self._cells_by_row = [
+            [cell for cell in self._cells_cache if cell.row_idx == r]
+            for r in range(self._nallowed_values)
+        ]
+        self._cells_by_column = [
+            [cell for cell in self._cells_cache if cell.column_idx == c]
+            for c in range(self._nallowed_values)
+        ]
+
+    def validate_board(self):
+        """Validate the board by checking if there is any repeated, non-zero
+        values within the groups (rows, columns, and blocks)
+        """
+        groups_collection = [self.rows, self.columns, self.blocks]
+        for groups in groups_collection:
+            for ii, group in enumerate(groups):
+                nonzero_vals = [
+                    val
+                    for val in group.values
+                    if val not in empty_cell_repr or val in self.allowed_values
+                ]
+                assert len(nonzero_vals) == len(
+                    set(nonzero_vals)
+                ), f"Board is invalid; there is a repetition in {group}"
+
+    def update_board_value(self, val, cell: Cell, validate: bool = True):
+        """Update the value of a single cell on the board in place."""
+        if validate:
+            assert (
+                val in self.allowed_values or val in empty_cell_repr
+            ), f"Value ({val}) is not in allowed values ({self.allowed_values})."
+            old_val = self._board[cell.row_idx][cell.column_idx]
+            self._board[cell.row_idx][cell.column_idx] = val
+            try:
+                for group in (cell.row, cell.column, cell.block):
+                    nonzero_vals = [
+                        v
+                        for v in group.values
+                        if v not in empty_cell_repr or v in self.allowed_values
+                    ]
+                    assert len(nonzero_vals) == len(
+                        set(nonzero_vals)
+                    ), f"Board is invalid; there is a repetition in {group}"
+            except AssertionError:
+                self._board[cell.row_idx][cell.column_idx] = old_val
+                raise
+        else:
+            self._board[cell.row_idx][cell.column_idx] = val
+
+    @property
+    def rows(self) -> List[Row]:
+        """A list of Row's in the board.
+
+        Returns
+        -------
+        rows: list
+            A list that contains :class:`~sudoku.groups.Row` for each row in
+            the board.
+        """
+        return [
+            Row(self.board, idx, self.allowed_values)
+            for idx in range(self._nallowed_values)
+        ]
+
+    @property
+    def columns(self) -> List[Column]:
+        """A list of Column's in the board.
+
+        Returns
+        -------
+        columns: list
+            A list that contains :class:`~sudoku.groups.Column` for each column
+            in the board.
+        """
+        return [
+            Column(self.board, idx, self.allowed_values)
+            for idx in range(self._nallowed_values)
+        ]
+
+    @property
+    def blocks(self) -> List[Block]:
+        """A list of Block's in the board.
+
+        Returns
+        -------
+        blocks: list
+            A list that contains :class:`~sudoku.groups.Block` for each block
+            in the board.
+        """
+        return [
+            Block(
+                self.board,
+                idx,
+                self.block_dim,
+                self.allowed_values,
+            )
+            for idx in range(self._nblocks)
+        ]
+
+    @property
+    def cells(self) -> np.array:
+        """Return the cells in a 2D array.
+
+        Returns
+        -------
+        cells: np.ndarray
+            A 2D array of the same shape as the board that contains
+            :class:`~sudoku.cell.Cell` for each cell in the board.
+        """
+        return np.array(self._cells_flatten).reshape(
+            self._nallowed_values, self._nallowed_values
+        )
+
+    @property
+    def _cells_flatten(self) -> List[Cell]:
+        """Return cached :class:`~sudoku.cell.Cell` instances for the board.
+
+        Returns
+        -------
+        cells: list
+            A list that contains :class:`~sudoku.cell.Cell` for each cell in
+            the board.
+        """
+        if (
+            self._cells_cache is None
+            or self._cells_cache[0]._board is not self._board
+        ):
+            self._rebuild_cell_cache()
+        return self._cells_cache
+
+    @property
+    def empty_cells(self) -> List[Cell]:
+        """List all the empty cells in the board."""
+        return self._get_empty_cells(fmt="list")
+
+    def _get_empty_cells(self, fmt="list") -> Sequence[Cell]:
+        """List all the empty cells."""
+        if fmt == "list":
+            return [cell for cell in self._cells_flatten if cell.is_empty]
+        elif fmt == "dict":
+            return {
+                ii: cell
+                for ii, cell in enumerate(self._cells_flatten)
+                if cell.is_empty
+            }
+
+    def _count_occurence(self) -> Sequence[int]:
+        """Count how many time each allowed value shows up in the board."""
+        occur = []
+        for val in self.allowed_values:
+            occur.append(sum(cell == val for row in self.board for cell in row))
+        return occur
+
+    @property
+    def solved(self) -> bool:
+        """Check if the board is solved."""
+        if len(self._get_empty_cells()) != 0:
+            return False
+        return all(
+            group.solved
+            for groups in (self.rows, self.columns, self.blocks)
+            for group in groups
+        )
+
+    def solve(
+        self,
+        callback: Callable = default_callback,
+        verbose: bool = False,
+        return_board: bool = True,
+    ):
+        """Main method to solve the Sudoku problem."""
+
+        start_time = time.perf_counter()
+        while not self.solved:
+            self.step(verbose)
+            callback(self)
+        finish_time = time.perf_counter()
+        if verbose:
+            print("Solving time:", timedelta(seconds=finish_time - start_time))
+        if return_board:
+            return self.board
+
+    def step(self, verbose: bool = False):
+        """Run one step of the algorithm.
+
+        Each step can only be one attempt to update the board from a single
+        occuring value or testing to set a cell to a value, but not both
+        """
+
+        # Try updating the cells by looking up and comparing the lists of
+        # possible values.
+        old_board = [row[:] for row in self._board]
+        self._update_cells()
+        if verbose:
+            print(
+                f"Iteration {self.niter}: "
+                f"{len(self._get_empty_cells())} empty cells left."
+            )
+
+        # Compare the board before and after the update. If the above algorithm
+        # fails to update any cells, then try setting one of the cells to a
+        # value.
+        if self._board == old_board:
+            empty_cells_dict = self._get_empty_cells(fmt="dict")
+            nposs_vals = [
+                len(cell.possible_values) for cell in empty_cells_dict.values()
+            ]
+
+            # Check if the attempt failed - This can be done if any empty cell
+            # has no possible value.
+            if 0 in nposs_vals:
+                # The trial fails and need to be reset to the previous cached
+                # state. After that, we will try other value to test. So, the
+                # previous cached state doesn't need to be popped.
+                self._revert_state()
+                if verbose:
+                    print(f"Search fails, reverting to iteration {self.niter}")
+                # Counter the iteration increment below
+                self.niter -= 1
+
+            elif empty_cells_dict:
+                self._update_intermediate_state(empty_cells_dict, nposs_vals)
+
+                # Retrieve data from the last intermediate state
+                last_state = self._intermediate_state[self.niter]
+                if last_state["tried_idx"] >= len(last_state["candidates"]):
+                    # We have exhausted all possible values for this cell.
+                    # Pop this dead state and revert to the previous saved state.
+                    self._revert_state(pop=True)
+
+                    if verbose:
+                        print(
+                            "No more values to try, "
+                            f"reverting to iteration {self.niter}"
+                        )
+                    # Counter the iteration increment below
+                    self.niter -= 1
+
+                else:
+                    cell = empty_cells_dict[last_state["cell_key"]]
+                    value = last_state["candidates"][last_state["tried_idx"]]
+                    last_state["tried_idx"] += 1
+                    if verbose:
+                        print(
+                            f"Try setting cell [{cell.row_idx}, "
+                            f"{cell.column_idx}] to {value} "
+                            f"(possible values: {last_state['candidates']})"
+                        )
+                    self.update_board_value(value, cell, validate=False)
+
+        self.niter += 1
+        self._nstep_call += 1
+
+    def _update_cells(self):
+        """Update the cells values."""
+        # Ensure cell cache is synchronized with self._board
+        _ = self._cells_flatten
+        # When the cell only has one possible value
+        self._update_cells_from_single_possible_value()
+        # Another option is to look if there is any value that can only go into
+        # a specific cell, i.e., there is only one occurence in the list of
+        # possible values
+        for block_cells in self._cells_by_block:
+            cells_block = [cell for cell in block_cells if cell.is_empty]
+            self._update_cells_from_single_possible_occurence(cells_block)
+        for row_cells in self._cells_by_row:
+            cells_row = [cell for cell in row_cells if cell.is_empty]
+            self._update_cells_from_single_possible_occurence(cells_row)
+        for col_cells in self._cells_by_column:
+            cells_column = [cell for cell in col_cells if cell.is_empty]
+            self._update_cells_from_single_possible_occurence(cells_column)
+
+    def _update_cells_from_single_possible_value(self):
+        """Update the cells that have only one possible value."""
+        cells = self._cells_flatten
+        while True:
+            n = 0
+            for cell in cells:
+                if cell.is_empty:
+                    poss_vals = cell.possible_values
+                    if len(poss_vals) == 1:
+                        # There is only 1 possible value that can go into this
+                        # empty cell
+                        self.update_board_value(
+                            poss_vals[0], cell, validate=False
+                        )
+                        n += 1
+            if n == 0:
+                break
+
+    def _update_cells_from_single_possible_occurence(
+        self, cells_group: Sequence[Cell]
+    ):
+        """Look at a single group (block, row, or column) and see if we can
+        solve any in that group by looking if there is a value in the list of
+        possible values of an empty cell that is not in the list of possible
+        values in other empty cells within the same group. If such value
+        exists, then we can only put that value in that cell.
+        """
+        poss_by_cell = {
+            cell: cell.possible_values for cell in cells_group if cell.is_empty
+        }
+        for cell in cells_group:
+            if cell not in poss_by_cell:
+                continue
+            for val in poss_by_cell[cell]:
+                val_in_other_cell = False
+                for cl, cl_poss in poss_by_cell.items():
+                    if cl != cell and val in cl_poss:
+                        val_in_other_cell = True
+                        break
+                if not val_in_other_cell:
+                    self.update_board_value(val, cell, validate=False)
+                    del poss_by_cell[cell]
+                    break
+
+    def _update_intermediate_state(
+        self, empty_cells_dict: Dict[int, Cell], nposs_vals: Sequence[int]
+    ):
+        """Store the intermediate state for the empty cell with fewest possible
+        values if not already cached for the current iteration.
+        """
+        if self.niter not in self._intermediate_state:
+            min_idx = min(range(len(nposs_vals)), key=nposs_vals.__getitem__)
+            cell_key = list(empty_cells_dict)[min_idx]
+            cell = empty_cells_dict[cell_key]
+            self._intermediate_state[self.niter] = {
+                "board": copy.deepcopy(self.board),
+                "cell_key": cell_key,
+                "candidates": list(cell.possible_values),
+                "tried_idx": 0,
+            }
+
+    def _revert_state(self, pop=False):
+        """Revert to the previous saved state."""
+        if not self._intermediate_state:
+            raise ValueError("The Sudoku board has no valid solution.")
+        if pop:
+            self._intermediate_state.popitem()
+            if not self._intermediate_state:
+                raise ValueError("The Sudoku board has no valid solution.")
+        self.niter = list(self._intermediate_state)[-1]
+        self.board = copy.deepcopy(self._intermediate_state[self.niter]["board"])
+
+    def _cells_same(self, cells1: Sequence[Cell], cells2: Sequence[Cell]):
+        """Compare the cells, check if they are the same."""
+        cells1_dict = self._cells_to_dict_possible_values(cells1)
+        cells2_dict = self._cells_to_dict_possible_values(cells2)
+        return cells1_dict == cells2_dict
+
+    @staticmethod
+    def _cells_to_dict_possible_values(cells: Sequence[Cell]) -> Dict:
+        """Convert the list of cells into dictionary. The dictionary only
+        contains the possible values.
+        """
+        cells_dict = {}
+        for cell in cells:
+            if cell.is_empty:
+                cells_dict.update(
+                    {(cell.row_idx, cell.column_idx): cell.possible_values}
+                )
+        return cells_dict
+
+    def save_state(self, filename: str):
+        """Save the current state of the Sudoku to a pickle file."""
+        with open(filename, "wb") as f:
+            pickle.dump(
+                {
+                    "board": self.board,
+                    "orig_board": self.orig_board,
+                    "allowed_values": self.allowed_values,
+                    "block_dim": self.block_dim,
+                    "intermediate_state": self._intermediate_state,
+                    "niter": self.niter,
+                    "nstep_call": self._nstep_call,
+                },
+                f,
+            )
+
+    def load_state(self, filename: str):
+        """Load the state of the Sudoku from a pickle file."""
+        with open(filename, "rb") as f:
+            state = pickle.load(f)
+
+        self.allowed_values = state["allowed_values"]
+        self._nallowed_values = len(self.allowed_values)
+        self.block_dim = state["block_dim"]
+        self._nblocks = self.block_dim[0] * self.block_dim[1]
+        self.orig_board = copy.deepcopy(state["orig_board"])
+        if state["board"] is not None:
+            self.board = state["board"]
+        else:
+            self._board = None
+            self._cells_cache = None
+            self._cells_by_block = None
+            self._cells_by_row = None
+            self._cells_by_column = None
+        self._intermediate_state = copy.deepcopy(state["intermediate_state"])
+        self.niter = state["niter"]
+        self._nstep_call = state["nstep_call"]
+
+    def display(self):
+        """Display the Sudoku board."""
+        # Let's find the maximum number of characters in the allowed values.
+        # Sometimes the allowed values may consists of more than 1 character.
+        # So, we need to account for this to display the board nicely.
+        max_char_len = max([len(str(val)) for val in self.allowed_values])
+        # Find how many column separators we need. Column separators include
+        # " | " or " # " at the block boundaries.
+        ncol_separators = (self._nallowed_values - 1) * 3
+        # Now, this is how many characters we need to print in each row. Note
+        # that we also need the board borders.
+        nchar_per_row = (
+            self._nallowed_values * (max_char_len)
+            + ncol_separators
+            + 4  # for borders "# " and " #"
+        )
+
+        # Print the top border
+        print("#" * nchar_per_row)
+        # Print rows
+        board = self.board.copy()
+        for ii, row in enumerate(board):
+            # First, add " " padding to each value in the row if needed
+            row_val = []
+            for val in row:
+                # For the empty cell, we just print empty spaces
+                if val in empty_cell_repr and val not in self.allowed_values:
+                    val = " "
+                if len(str(val)) < max_char_len:
+                    row_val.append(
+                        " " * (max_char_len - len(str(val))) + str(val)
+                    )
+                else:
+                    row_val.append(str(val))
+            # Add the border and column separators. It is still in a list
+            # because next we need to replace some of the separators with "#"
+            # for block separation.
+            row_str_list = list("# " + " | ".join(row_val) + " #")
+            # Replace some colulmn separators with "#"
+            separator_idx = [
+                idx for idx, ch in enumerate(row_str_list) if ch == "|"
+            ]  # This is where we need to replace "|" with "#"
+            for jj, idx in enumerate(separator_idx):
+                if (jj + 1) % self.block_dim[1] == 0:
+                    row_str_list[idx] = "#"
+            # Finally, we can print the row
+            row_str = "".join(row_str_list)
+            print(row_str)
+
+            # Now, we also need to take care of the row separators
+            emDash = "\u2014"
+            if (ii + 1) % self.block_dim[0] != 0:
+                # This is for normal row separator
+                row_separator = list("#" + emDash * (nchar_per_row - 2) + "#")
+                # But we need to replace separator with either "+" at the column
+                # boundaries or "#" at the block column boundaries.
+                for jj, idx in enumerate(separator_idx):
+                    if (jj + 1) % self.block_dim[1] == 0:
+                        row_separator[idx] = "#"
+                    else:
+                        row_separator[idx] = "+"
+                print("".join(row_separator))
+            else:
+                # And this is for the block row separator
+                print("#" * nchar_per_row)
+
+    def reset(self):
+        """Reset the Sudoku problem."""
+        self.board = self.orig_board
+        self._intermediate_state = {}
+        self.niter = 0
+        self._nstep_call = 0
