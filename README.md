@@ -89,13 +89,26 @@ Options:
 ### Web App
 
 A web app is also included, built with [Flask](https://flask.palletsprojects.com/en/stable/).
-The web app allows users to play Sudoku and solve problems using a graphical user interface (GUI), if preferred.
+It supports playing and solving puzzles across multiple board dimensions (4x4, 6x6, 8x8, 9x9, 16x16 hex, or custom symbols/block dimensions) with:
+
+* Light / Dark mode toggle
+* Row, column, block, and matching-symbol highlighting, plus toggleable conflict detection
+* Keyboard navigation (`Arrow` keys, `Backspace`/`Delete`, `Ctrl+Z`/`Ctrl+Y` undo/redo) and an interactive symbol pad with remaining counts
+* Pencil marks (Notes mode with automatic peer cleanup) and a pauseable timer
+* **Next Step**, **Watch Solve** (animated step-by-step playback), and **Solve All** controls powered by your solver
+* **Import / Export** for pasting or copying puzzles in text format
+
 To start the server, execute one of the following commands:
 
 ```bash
 $ python Sudoku/sudoku/web_app/app.py
-$ sudoku-play
+$ sudoku-play --host 127.0.0.1 --port 5000
 ```
+
+Options for `sudoku-play`:
+* `--host`: host interface to bind to (default: `127.0.0.1`)
+* `--port`: port to listen on (default: `5000`)
+* `--debug` / `--no-debug`: enable or disable Flask debug mode (default: enabled)
 
 
 ## Tests
