@@ -195,8 +195,44 @@ class TestWebAppLogic(unittest.TestCase):
         self.assertEqual(status, 400)
         self.assertIn("error", res)
 
-        # POST /check_solution valid, invalid duplicate, missing payload
+        # GET /generate with multi-dimension presets (4x4, 6x6, 8x8, 16x16) and custom
+        for size_key, expected_n in [("4x4", 4), ("6x6", 6), ("8x8", 8), ("16x16", 16)]:
+            req.args = self._stub._DummyArgs({"level": "3", "size": size_key})
+            res = self.webapp.generate_sudoku()
+            self.assertEqual(len(res["problem"]), expected_n)
+            self.assertEqual(len(res["allowed_values"]), expected_n)
+
+        req.args = self._stub._DummyArgs(
+            {
+                "level": "2",
+                "allowed_values": "ABCD",
+                "block_rows": "2",
+                "block_cols": "2",
+            }
+        )
+        res_custom = self.webapp.generate_sudoku()
+        self.assertEqual(res_custom["allowed_values"], ["A", "B", "C", "D"])
+        self.assertEqual(res_custom["block_dim"], [2, 2])
+        self.assertEqual(len(res_custom["problem"]), 4)
+
+        req.args = self._stub._DummyArgs({"level": "3", "size": "99x99"})
+        res_bad_size, status = self.webapp.generate_sudoku()
+        self.assertEqual(status, 400)
+        self.assertIn("error", res_bad_size)
+
+        # POST /check_solution valid, invalid duplicate, missing payload, multi-dim
         req._json = {"problem": self.b01["solution"]}
+        self.assertEqual(self.webapp.check_solution(), {"solved": True})
+
+        req._json = {
+            "problem": [
+                ["1", "2", "3", "4"],
+                ["3", "4", "1", "2"],
+                ["2", "1", "4", "3"],
+                ["4", "3", "2", "1"],
+            ],
+            "size": "4x4",
+        }
         self.assertEqual(self.webapp.check_solution(), {"solved": True})
 
         dup_board = [[1, 1] + [0] * 7] + [[0] * 9 for _ in range(8)]
@@ -207,6 +243,71 @@ class TestWebAppLogic(unittest.TestCase):
         res, status = self.webapp.check_solution()
         self.assertEqual(status, 400)
         self.assertFalse(res["solved"])
+
+    def test_solve_solve_steps_and_hint_endpoints(self):
+        req = self._stub.request
+
+        # POST /solve (9x9 + 6x6 custom)
+        req._json = {"problem": self.b01["board"]}
+        res_solve = self.webapp.solve_endpoint()
+        self.assertEqual(res_solve["solution"], self.b01["solution"])
+        self.assertGreater(res_solve["steps"], 0)
+
+        with open(DATA_DIR / "6by6" / "board_01.json", "r") as f:
+            b6 = json.load(f)
+        req._json = {
+            "problem": [[str(c) if c else "" for c in r] for r in b6["board"]],
+            "size": "6x6",
+        }
+        res_6 = self.webapp.solve_endpoint()
+        self.assertEqual(
+            res_6["solution"], [[str(c) for c in r] for r in b6["solution"]]
+        )
+
+        # POST /solve on invalid/unsolvable returns 400
+        req._json = {"problem": [[1, 1] + [0] * 7] + [[0] * 9 for _ in range(8)]}
+        res_err, status = self.webapp.solve_endpoint()
+        self.assertEqual(status, 400)
+        self.assertIn("error", res_err)
+
+        # POST /solve_steps
+        req._json = {"problem": self.b01["board"]}
+        res_steps = self.webapp.solve_steps_endpoint()
+        self.assertEqual(res_steps["solution"], self.b01["solution"])
+        self.assertEqual(res_steps["total_steps"], len(res_steps["steps"]))
+        self.assertGreater(res_steps["total_steps"], 0)
+        self.assertEqual(res_steps["steps"][-1]["empty_count"], 0)
+
+        # POST /hint (cell mode + candidates mode + already solved)
+        req._json = {"problem": self.b01["board"], "row": 2, "col": 2, "mode": "cell"}
+        res_hint = self.webapp.hint_endpoint()
+        self.assertFalse(res_hint["already_solved"])
+        self.assertEqual((res_hint["row"], res_hint["col"]), (2, 2))
+        self.assertEqual(res_hint["value"], self.b01["solution"][2][2])
+
+        req._json = {"problem": self.b01["board"], "mode": "cell"}
+        res_auto_hint = self.webapp.hint_endpoint()
+        r, c = res_auto_hint["row"], res_auto_hint["col"]
+        self.assertEqual(res_auto_hint["value"], self.b01["solution"][r][c])
+
+        req._json = {
+            "problem": self.b01["board"],
+            "row": 2,
+            "col": 2,
+            "mode": "candidates",
+        }
+        res_cand = self.webapp.hint_endpoint()
+        self.assertTrue(res_cand["is_empty"])
+        self.assertIn(self.b01["solution"][2][2], res_cand["possible_values"])
+
+        req._json = {"problem": self.b01["solution"], "mode": "cell"}
+        self.assertTrue(self.webapp.hint_endpoint()["already_solved"])
+
+        # Bad hint coordinates -> 400
+        req._json = {"problem": self.b01["board"], "row": 99, "col": 0, "mode": "cell"}
+        res_bad_hint, status = self.webapp.hint_endpoint()
+        self.assertEqual(status, 400)
+        self.assertIn("error", res_bad_hint)
 
 
 @unittest.skipUnless(HAS_JINJA2, "jinja2 is not installed")
