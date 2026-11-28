@@ -331,6 +331,10 @@ class TestWebAppTemplate(unittest.TestCase):
         self.assertTrue((static_dir / "style.css").is_file())
         self.assertTrue((static_dir / "app.js").is_file())
         self.assertTrue((static_dir / "pyodide_worker.js").is_file())
+        css = (static_dir / "style.css").read_text(encoding="utf-8")
+        # Ensure global input[type="text"] does not shadow .cell .cell-input transparency
+        self.assertNotIn('\ninput[type="text"],', css)
+        self.assertIn(".cell .cell-input {", css)
 
     def test_template_fresh_get_renders_controls_and_initial_state(self):
         rendered = self.template.render(
